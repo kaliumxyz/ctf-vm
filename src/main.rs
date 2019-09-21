@@ -15,611 +15,584 @@ fn main() {
 
 }
 
+const DEBUG: bool = false;
+
 fn run(mut program: Vec<u8>) {
     // registers
+    let mut debug: bool = false;
     let mut ip: usize = 0;
     let mut sp: usize = 0;
-    let mut register:[u16;8]= [0; 8];
+    let mut register:[u16;9]= [0; 9];
     let mut op_counter = 0;
 
     let mut stack:[u16;1028] = [0; 1028];
 
-    let debug = true;
-    let mut breakpoint = 0;
+    let mut counter = 700000;
+    let mut read_counter = 0;
 
     loop {
-        op_counter = op_counter + 1;
-        if debug == true {
-            println!("{} {}", ip, op_counter);
+        if read_counter > 0 {
+            read_counter = read_counter + 1;
         }
-        if op_counter > 1000 {
-            println!("instructions completed {}", op_counter);
-            println!("IP at {}", ip);
-            break;
+        if counter == 0 {
+            // println!("instructions completed {}", op_counter);
+            // println!("IP at {}", ip);
+            // let mut i = 0;
+            // loop {
+            //     println!("register {}: {}", i, register[i]);
+            //     i = i + 1;
+            //     if i > 7 {
+            //         break;
+            //     }
+            // }
+            // let mut i = 0;
+            // loop {
+            //     println!("stack {}: {}", i, stack[i]);
+            //     i = i + 1;
+            //     if i > 10 {
+            //         break;
+            //     }
+            // }
+            // break;
+            println!("DEBUG> ");
+            use std::io;
+            let mut input = String::new();
+            match io::stdin().read_line(&mut input) {
+                Ok(_) => {
+                    if input == "s\n" {
+                        println!("stepping 100");
+                        counter = 100;
+                    }
+                    if input == "ss\n" {
+                        println!("stepping 1000");
+                        counter = 1000;
+                    }
+                    if input == "sss\n" {
+                        println!("stepping 10000");
+                        counter = 10000;
+                    }
+                    if input == "ssss\n" {
+                        println!("stepping 100000");
+                        counter = 100000;
+                    }
+                    if input == "sssss\n" {
+                        println!("stepping 1000000");
+                        counter = 1000000;
+                    }
+                    if input == "debug\n" {
+                        println!("debug set");
+                        debug = !debug;
+                        continue;
+                    }
+                    if input == "dump\n" {
+                        println!("dumping program");
+                        if let Ok(_) = fs::write("./out", &program) {
+                            println!("dumped!");
+                        }
+                        continue;
+                    }
+                    if input == "stack\n" {
+                        println!("instructions completed {}", op_counter);
+                        println!("IP at {}", ip);
+                        let mut i = 0;
+                        loop {
+                            println!("register {}: {}", i, register[i]);
+                            i = i + 1;
+                            if i > 7 {
+                                break;
+                            }
+                        }
+                        let mut i = 0;
+                        loop {
+                            println!("stack {}: {}", i, stack[i]);
+                            i = i + 1;
+                            if i > 10 {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+                    if input == "run\n" {
+                        counter = -1;
+                    }
+                },
+                Err(_) => {}
+            }
+        } else {
+            counter = counter - 1;
+        }
+        op_counter = op_counter + 1;
+        if DEBUG || debug {
+            println!("{} {} {}", ip, op_counter, read_counter);
         }
         match program[ip as usize]{
             0 => {
-                if debug == true {
-                    println!("opcode 0: halt");
+                if DEBUG || debug {
+                    println!("opcode 0: HALT");
                 }
                 println!("instructions completed {}", op_counter);
                 println!("IP at {}", ip);
                 break;
             },
             1 => {
-                if debug == true {
-                    println!("opcode 1: set a b");
+                if DEBUG || debug {
+                    println!("opcode 1: SET [A] TO B");
+                    println!(" A: REGISTER");
                 }
-
                 ip = ip + 2;
-                let a = program[ip + 1] as usize;
-                let b = program[ip] as usize;
-
-                let mut target = a << 8 | b;
-
-                target = target % 32768;
-                ip = ip + 2;
-
-                if target < 8 {
-                    let c = program[ip + 1] as u16;
-                    let d = program[ip] as u16;
-
-                    let value = c << 8 | d;
-
-                    register[target] = value;
-                    if debug == true {
-                        println!("set {} to {}", target, value);
-                        if value == 16724 {
-                            if breakpoint == 9 {
-                                println!("instructions completed {}", op_counter);
-                                println!("IP at {}", ip);
-                                let mut i = 0;
-                                loop {
-                                    println!("register {}: {}", i, register[i]);
-                                    i = i + 1;
-                                    if i > 7 {
-                                        break;
-                                    }
-                                }
-                                let mut i = 0;
-                                loop {
-                                    println!("stack {}: {}", i, stack[i]);
-                                    i = i + 1;
-                                    if i > 10 {
-                                        break;
-                                    }
-                                }
-                                break;
-                            } else {
-                                breakpoint = breakpoint + 1;
-                            }
-                        }
-                    }
+                let a = write_argument(ip, &program) as usize;
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
                 }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                register[a] = b;
 
                 ip = ip + 2;
-
+                if DEBUG || debug {
+                    println!(" RESULT:  [{}] = {}", a, b);
+                    println!("          [{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             2 => {
+                if DEBUG || debug {
+                    println!("opcode 2: PUSH TO STACK FROM [A]");
+                    println!(" A: REGISTER");
+                }
                 ip = ip + 2;
-                let higher = program[ip + 1] as usize;
-                let lower = program[ip] as usize;
+                let a: u16 = read_argument(ip, &program, register);
+                let b: u16 = write_argument(ip, &program);
 
-                let mut a = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 2 (raw): {} reg {}", a, a % 32768);
-                }
-
-                if a > 32767 {
-                    a = register[a % 32768] as usize;
-                }
-
-                if debug == true {
-                    println!("opcode 2: push a: {}", a);
-                }
-                stack[sp] = a as u16;
+                stack[sp] = a;
                 sp = sp + 1;
+
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  <{}> = [{}]", sp, b);
+                    println!("          <{}> = {}", sp, a);
+                    println!("          <{}> = {}", sp, stack[sp - 1]);
+                    println!(" [SP IP] <{}>", sp);
+                }
             },
             3 => {
-                ip = ip + 2;
-                let higher = program[ip + 1] as usize;
-                let lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                if debug == true {
-                    println!("opcode 3: pop into a: {} {}", a, stack[sp]);
+                if DEBUG || debug {
+                    println!("opcode 3: POP FROM STACK TO [A]");
+                    println!(" A: REGISTER");
                 }
+                ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
 
                 sp = sp - 1;
                 register[a] = stack[sp];
-                if debug == true {
-                    println!("opcode 3: pop into a: {} {}", a, stack[sp]);
-                }
                 stack[sp] = 0;
+
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [{}] = <{}>", a, sp);
+                    println!("          [{}] = {}", a, register[a]);
+                    println!("          <{}> = {}", sp, stack[sp]);
+                    println!(" [{} IP SP] <{}>", a, sp);
+                }
             },
             4 => {
+                if DEBUG || debug {
+                    println!("opcode 4: IF B EQUALS C SET A TO 1 ELSE A TO 0");
+                    println!(" A: REGISTER");
+                }
                 ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
+                let a = write_argument(ip, &program) as usize;
 
-                let a = (higher << 8 | lower) % 32768;
-
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
+                let b: u16 = read_argument(ip, &program, register);
 
-                let mut b = higher << 8 | lower;
-
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
+                let c: u16 = read_argument(ip, &program, register);
 
-                let mut c = higher << 8 | lower;
-                if debug == true {
-                    println!("opcode 4 (raw): set a to b == c: {} {} {}", a, b, c);
-                }
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                if c > 32767 {
-                    c = register[c % 32768] as usize;
-                }
-
-                if debug == true {
-                    println!("opcode 4: set a to b == c: {} {} {}", a, b, c);
-                }
                 if b == c {
                     register[a] = 1;
                 } else {
                     register[a] = 0;
                 }
 
-                if debug == true {
-                    println!("opcode 4: {}", register[a]);
-                }
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [{}] = {} == {}", a, b, c);
+                    println!("          [{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [{} IP]", a);
+                }
             },
-            5 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let b = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let c = (higher << 8 | lower) % 32768;
-
-                if debug == true {
-                    println!("opcode 5: set a to b > c: {} {} {}", a, b, c);
+            5 => { //3 args, should increment ip by 8
+                if DEBUG || debug {
+                    println!("opcode 5: IF B LARGER THAN C SET A TO 1 ELSE A TO 0");
+                    println!(" A: REGISTER");
                 }
+                ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
+                ip = ip + 2;
+                let c: u16 = read_argument(ip, &program, register);
+
                 if b > c {
                     register[a] = 1;
                 } else {
                     register[a] = 0;
                 }
 
-                if debug == true {
-                    println!("opcode 5: {}", register[a]);
-                }
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [A{}] = B{} > C{}", a, b, c);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!("[{} IP]", a);
+                }
             },
             6 => {
-                ip = ip + 2;
-                let a = program[ip + 1] as usize;
-                let b = program[ip] as usize;
-
-                if debug == true {
-                    println!("opcode 6: jump to: {}", a << 8 | b);
+                if DEBUG || debug {
+                    println!("opcode 6: JUMP");
+                    println!(" A: JUMP ADDRESS");
                 }
+                ip = ip + 2;
+                let a = read_argument(ip, &program, register) as usize;
 
-                ip = (a << 8 | b) * 2;
+                ip = a * 2;
+
+                if DEBUG || debug {
+                    println!(" RESULT:  [IP] = &{}", a * 2);
+                    println!("          [IP] = &{}", ip);
+                    println!("");
+                    println!(" [IP]");
+                }
             },
             7 => {
+                if DEBUG || debug {
+                    println!("opcode 7: JUMP IF NONZERO");
+                    println!(" A: CONDITIONAL");
+                }
                 ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
+                let a: u16 = read_argument(ip, &program, register);
 
-                let mut a = higher << 8 | lower;
-
+                if DEBUG || debug {
+                    println!(" B: JUMP ADDRESS");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
+                let b = read_argument(ip, &program, register) as usize;
 
-                let b = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 7 (raw): jump to b if a is nonzero: {} {}", a, b);
-                }
-
-                if a > 32767 && a < 32776 {
-                    a = register[a % 32768] as usize;
-                }
-
-                if debug == true {
-                    println!("opcode 7: jump to b if a is nonzero: {} {}", a, b);
-                }
-
-                if a > 0 {
+                if a != 0 {
                     ip = b * 2;
                 } else {
                     ip = ip + 2;
                 }
+
+                if DEBUG || debug {
+                    println!(" RESULT:  A{} != 0", b * 2);
+                    println!("          [IP] = B{}", b * 2);
+                    println!("          [IP] == {}", ip);
+                    println!(" [IP]");
+                }
+
             },
             8 => {
+                if DEBUG || debug {
+                    println!("opcode 8: JUMP IF ZERO");
+                    println!(" A: CONDITIONAL");
+                }
                 ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
+                let a: u16 = read_argument(ip, &program, register);
 
-                let mut a = higher << 8 | lower;
-
+                if DEBUG || debug {
+                    println!(" B: JUMP ADDRESS");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
+                let b = read_argument(ip, &program, register) as usize;
 
-                let b = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 8 (raw): jump to b if a is zero: {} {}", a, b);
-                }
-
-                if a > 32767 && a < 32776 {
-                    a = register[a % 32768] as usize;
-                }
-
-                if debug == true {
-                    println!("opcode 8: jump to b if a is zero: {} {}", a, b * 2);
-                }
-
-                if a > 0 {
-                    ip = ip + 2;
-                } else {
+                if a == 0 {
                     ip = b * 2;
+                } else {
+                    ip = ip + 2;
+                }
+
+                if DEBUG || debug {
+                    println!(" RESULT:  A{} == 0", b * 2);
+                    println!("          [IP] = B{}", b * 2);
+                    println!("          [IP] == {}", ip);
+                    println!(" [IP]");
                 }
             },
             9 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let b = higher << 8 | lower;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let c = higher << 8 | lower;
-
-                let b = b as u16;
-                let c = c as u16;
-
-                register[a] = ((b + c) % 32768) as u16;
-
-                if debug == true {
-                    println!("opcode 9: add into a, b + c: {} {} {}", a, b, c);
-                    println!("opcode 9: {}", register[a]);
+                if DEBUG || debug {
+                    println!("opcode 9: ADD SET [A] RESULT B + C");
+                    println!(" A: REGISTER");
                 }
+                ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
+                ip = ip + 2;
+                let c: u16 = read_argument(ip, &program, register);
+
+                register[a] = (b + c) % 32768;
 
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  {} + {} = {}", b, c, (b + c) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             10 => {
+                if DEBUG || debug {
+                    println!("opcode 10: MUTIPLY SET [A] RESULT B * C");
+                    println!(" A: REGISTER");
+                }
                 ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
+                let a = write_argument(ip, &program) as usize;
 
-                let a = (higher << 8 | lower) % 32768;
-
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
+                let b = read_argument(ip, &program, register) as usize;
 
-                let mut b = higher << 8 | lower;
-
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
                 ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut c = higher << 8 | lower;
-                if debug == true {
-                    println!("opcode 10 (raw): {} {} {}", a, b, c);
-                }
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                if c > 32767 {
-                    c = register[c % 32768] as usize;
-                }
-
-                if debug == true {
-                    println!("opcode 10: set a to b * c: {} {} {}", a, b, c);
-                }
+                let c = read_argument(ip, &program, register) as usize;
 
                 register[a] = ((b * c) % 32768) as u16;
 
-                if debug == true {
-                    println!("opcode 10: {}", register[a]);
-                }
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  {} * {} = {}", b, c, (b * c) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             11 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut c = higher << 8 | lower;
-                if debug == true {
-                    println!("opcode 11 (raw): {} {} {}", a, b, c);
-                }
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                if c > 32767 {
-                    c = register[c % 32768] as usize;
-                }
-
-                let b = b as u16;
-                let c = c as u16;
-
-                if debug == true {
-                    println!("opcode 11: set a to b % c: {} {} {}", a, b, c);
-                }
-
-                register[a] = ((b % c) % 32768) as u16;
-
-                if debug == true {
-                    println!("opcode 11: {}", register[a]);
+                if DEBUG || debug {
+                    println!("opcode 11: MODULO SET [A] RESULT B % C");
+                    println!(" A: REGISTER");
                 }
                 ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
+                ip = ip + 2;
+                let c: u16 = read_argument(ip, &program, register);
+
+                register[a] = (b % c) % 32768;
+
+                ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  {} % {} = {}", b, c, (b % c) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             12 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut c = higher << 8 | lower;
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                if c > 32767 {
-                    c = register[c % 32768] as usize;
-                }
-
-                let b = b as u16;
-                let c = c as u16;
-
-                if debug == true {
-                    println!("opcode 12: and, store into a bitwise b and c: {} {} {}", a, b, c);
-                }
-                register[a] = b & c;
-
-                if debug == true {
-                    println!("opcode 12: {}", register[a]);
+                if DEBUG || debug {
+                    println!("opcode 12: AND SET [A] RESULT B & C");
+                    println!(" A: REGISTER");
                 }
                 ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
+                ip = ip + 2;
+                let c: u16 = read_argument(ip, &program, register);
+
+                register[a] = (b & c) % 32768;
+
+                ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  {} & {} = {}", b, c, (b & c) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             13 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut c = higher << 8 | lower;
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                if c > 32767 {
-                    c = register[c % 32768] as usize;
-                }
-
-                let b = b as u16;
-                let c = c as u16;
-
-                if debug == true {
-                    println!("opcode 13: or, store into a bitwise or b c: {} {} {}", a, b, c);
-                }
-                register[a] = b | c;
-
-                if debug == true {
-                    println!("opcode 13: {}", register[a]);
+                if DEBUG || debug {
+                    println!("opcode 13: OR SET [A] RESULT B | C");
+                    println!(" A: REGISTER");
                 }
                 ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                if DEBUG || debug {
+                    println!(" C: INTEGER");
+                }
+                ip = ip + 2;
+                let c: u16 = read_argument(ip, &program, register);
+
+                register[a] = (b | c) % 32768;
+
+                ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  {} | {} = {}", b, c, (b | c) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             14 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
-                let b = b as u16;
-
-                if debug == true {
-                    println!("opcode 14: not, store into a not b: {} {}", a, b);
-                }
-                register[a] = !b % 32768;
-
-                if debug == true {
-                    println!("opcode 14: {}", register[a]);
+                if DEBUG || debug {
+                    println!("opcode 14: NOT SET [A] RESULT !B");
+                    println!(" A: REGISTER");
                 }
                 ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
+                }
+                ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                register[a] = (!b) % 32768;
+                ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  !{} = {}", b,(!b) % 32768);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
             },
             15 => {
-                ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let a = (higher << 8 | lower) % 32768;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-                if debug == true {
-                    println!("opcode 15 (raw): {} {}", a, b);
+                if DEBUG || debug {
+                    println!("opcode 15: RMEM READ TO [A] FROM &B");
+                    println!(" A: REGISTER");
                 }
+                ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
 
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
+                if DEBUG || debug {
+                    println!(" B: ADDRESS");
                 }
+                ip = ip + 2;
+                let mut b = read_argument(ip, &program, register) as usize;
 
                 b = b * 2;
 
-                higher = program[b + 1] as usize;
-                lower = program[b] as usize;
-
-                let c = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 15: read from mem b to reg a: {} {} {}", a, b, c);
+                if DEBUG || debug {
+                    println!(" &B: MEMORY AT B");
                 }
+                let c = read_argument(b, &program, register);
 
-                register[a] = c as u16;
+                register[a] = c;
 
-                if debug == true {
-                    println!("opcode 15: {}", register[a]);
-                }
                 ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [A{}] = &{}", a, b);
+                    println!("          [A{}] = {}", a, c);
+                    println!("          [A{}] = {}", a, register[a]);
+                    println!(" [IP {}]", a);
+                }
             },
             16 => {
+                if DEBUG || debug {
+                    println!("opcode 16: WMEM WRITE B TO &A");
+                    println!(" A: ADDRESS");
+                }
                 ip = ip + 2;
-                let mut higher = program[ip + 1] as usize;
-                let mut lower = program[ip] as usize;
-
-                let mut a = higher << 8 | lower;
-
-                ip = ip + 2;
-                higher = program[ip + 1] as usize;
-                lower = program[ip] as usize;
-
-                let mut b = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 16 (raw): {} {}", a, b);
-                }
-
-                if a > 32767 {
-                    a = register[a % 32768] as usize;
-                }
-
-                if b > 32767 {
-                    b = register[b % 32768] as usize;
-                }
-
+                let mut a = read_argument(ip, &program, register) as usize;
                 a = a * 2;
 
-                if debug == true {
-                    println!("opcode 16: write to a, b: {} {}", a, b);
-                }
-
-                program[a+1] = higher as u8;
-                program[a] = lower as u8;
-
-                if debug == true {
-                    println!("opcode 16: {}", b);
+                if DEBUG || debug {
+                    println!(" B: INTEGER");
                 }
                 ip = ip + 2;
+                let b: u16 = read_argument(ip, &program, register);
+
+                let higher = (b >> 8) as u8;
+                let lower = b as u8;
+
+                program[a+1] = higher;
+                program[a] = lower;
+
+                ip = ip + 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [PROGRAM{}] = B{}", a, b);
+                    println!("          b{:b} b{:b}", higher, lower);
+                    println!("          b{:b} b{:b} = b{:b}", program[a+1], program[a], b);
+                    println!(" [IP PROGRAM]");
+                }
             },
             17 => {
+                if DEBUG || debug {
+                    println!("opcode 17: CALL &A");
+                    println!(" A: ADDRESS");
+                }
                 ip = ip + 2;
-                let higher = program[ip + 1] as usize;
-                let lower = program[ip] as usize;
-
-                let mut a = higher << 8 | lower;
-
-                if debug == true {
-                    println!("opcode 17 (raw): call a: {}", a);
-                }
-
-                if a > 32767 {
-                    a = register[a % 32768] as usize;
-                }
+                let a = read_argument(ip, &program, register) as usize;
 
                 ip = ip + 2;
-                if debug == true {
-                    println!("opcode 17: call a: {} {}", a * 2, ip / 2);
-                }
                 stack[sp] = ip as u16 / 2;
                 sp = sp + 1;
 
                 ip = a * 2;
+                if DEBUG || debug {
+                    println!(" RESULT:  [IP{}] = A{}", ip ,a *2);
+                    println!("          <{}> = IP{}", sp - 1, stack[sp - 1]);
+                    println!("");
+                    println!(" [IP SP]");
+                }
             },
             18 => {
                 if sp == 0 {
-                    if debug == true {
+                    if DEBUG || debug {
                         println!("opcode 18: return: {}", stack[sp]);
                     }
                     println!("instructions completed {}", op_counter);
@@ -629,24 +602,41 @@ fn run(mut program: Vec<u8>) {
 
                 sp = sp - 1;
 
-                if debug == true {
-                    println!("opcode 18: return: {}", stack[sp] * 2);
+                if DEBUG || debug {
+                    println!("opcode 18: RETURN: {}", stack[sp] * 2);
                 }
                 ip = stack[sp] as usize * 2;
                 stack[sp] = 0;
             },
             19 => {
                 ip = ip + 2;
-                if debug == true {
-                    println!("opcode 19: print: {}", program[ip] as char);
+                if DEBUG || debug {
+                    println!("opcode 19: PRINT: {}", program[ip] as char);
+                    eprint!("{}", program[ip] as char);
                 } else {
                     print!("{}", program[ip] as char);
+                    // eprint!("{}", program[ip] as char);
                 }
                 ip = ip + 2;
             },
+            20 => {
+                if DEBUG || debug {
+                    println!("opcode 20: READ TO [A]");
+                    println!(" A: REGISTER");
+                }
+                ip = ip + 2;
+                let a = write_argument(ip, &program) as usize;
+
+                register[a] = read() as u16;
+
+                // eprintln!("readcounter tripped: {}", read_counter);
+                read_counter = 1;
+
+                ip = ip + 2;
+            },
             21 => {
-                if debug == true {
-                    println!("opcode 21: noop");
+                if DEBUG || debug {
+                    println!("opcode 21: NOOP");
                 }
                 ip = ip + 2;
             },
@@ -654,8 +644,62 @@ fn run(mut program: Vec<u8>) {
                 println!("opcode {}: err unkown opcode at {} follows: {:x} {:x}", c, ip, program[(ip + 1)], program[(ip + 2)]);
                 println!("instructions completed {}", op_counter);
                 println!("IP at {}", ip);
+                println!("dumping program");
+                if let Ok(_) = fs::write("./out", program) {
+                    println!("dumped!");
+                }
                 break;
             }
         }
+    }
+}
+
+fn read_argument(ip: usize, rom: &Vec<u8>, register:[u16;9] ) -> u16 {
+    let higher = rom[ip + 1] as u16;
+    let lower = rom[ip] as u16;
+    let debug = true;
+
+    let mut argument: u16 = higher << 8 | lower;
+    while argument > 32767 {
+        if DEBUG || debug {
+            println!(" read_argument hit [{}]", argument % 32767);
+        }
+        let index = argument as usize;
+        argument = register[index % 32768];
+    }
+    return argument;
+}
+
+fn write_argument(ip: usize, rom: &Vec<u8>) -> u16 {
+    let higher = rom[ip + 1] as u16;
+    let lower = rom[ip] as u16;
+    let debug = true;
+
+    let mut argument: u16 = higher << 8 | lower;
+    if argument > 32767 {
+        if DEBUG || debug {
+            println!(" write_argument hit [{}]", argument % 32767);
+        }
+        argument = argument % 32768;
+    }
+    if argument > 7 {
+        println!("invalid register! [{}]", argument);
+        println!("using special register [8]");
+        argument = 8;
+    }
+    return argument;
+}
+
+fn read() -> u8 {
+    use std::io::{Read, stdin};
+
+    let stdin = stdin();
+
+    let mut input = stdin.lock();
+    let mut reader:[u8;1] = [0;1];
+    if let Ok(_) = input.read_exact(&mut reader) {
+        return reader[0];
+    } else {
+        panic!("fuck");
     }
 }
