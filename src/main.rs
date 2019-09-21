@@ -25,9 +25,18 @@ fn run(mut program: Vec<u8>) {
     let mut stack:[u16;1028] = [0; 1028];
 
     let debug = true;
+    let mut breakpoint = 0;
 
     loop {
         op_counter = op_counter + 1;
+        if debug == true {
+            println!("{} {}", ip, op_counter);
+        }
+        if op_counter > 1000 {
+            println!("instructions completed {}", op_counter);
+            println!("IP at {}", ip);
+            break;
+        }
         match program[ip as usize]{
             0 => {
                 if debug == true {
@@ -60,6 +69,31 @@ fn run(mut program: Vec<u8>) {
                     register[target] = value;
                     if debug == true {
                         println!("set {} to {}", target, value);
+                        if value == 16724 {
+                            if breakpoint == 9 {
+                                println!("instructions completed {}", op_counter);
+                                println!("IP at {}", ip);
+                                let mut i = 0;
+                                loop {
+                                    println!("register {}: {}", i, register[i]);
+                                    i = i + 1;
+                                    if i > 7 {
+                                        break;
+                                    }
+                                }
+                                let mut i = 0;
+                                loop {
+                                    println!("stack {}: {}", i, stack[i]);
+                                    i = i + 1;
+                                    if i > 10 {
+                                        break;
+                                    }
+                                }
+                                break;
+                            } else {
+                                breakpoint = breakpoint + 1;
+                            }
+                        }
                     }
                 }
 
@@ -72,6 +106,10 @@ fn run(mut program: Vec<u8>) {
                 let lower = program[ip] as usize;
 
                 let mut a = higher << 8 | lower;
+
+                if debug == true {
+                    println!("opcode 2 (raw): {} reg {}", a, a % 32768);
+                }
 
                 if a > 32767 {
                     a = register[a % 32768] as usize;
@@ -90,6 +128,10 @@ fn run(mut program: Vec<u8>) {
                 let lower = program[ip] as usize;
 
                 let a = (higher << 8 | lower) % 32768;
+
+                if debug == true {
+                    println!("opcode 3: pop into a: {} {}", a, stack[sp]);
+                }
 
                 sp = sp - 1;
                 register[a] = stack[sp];
@@ -240,7 +282,7 @@ fn run(mut program: Vec<u8>) {
                 }
 
                 if debug == true {
-                    println!("opcode 8: jump to b if a is zero: {} {}", a, b);
+                    println!("opcode 8: jump to b if a is zero: {} {}", a, b * 2);
                 }
 
                 if a > 0 {
@@ -267,6 +309,9 @@ fn run(mut program: Vec<u8>) {
                 lower = program[ip] as usize;
 
                 let c = higher << 8 | lower;
+
+                let b = b as u16;
+                let c = c as u16;
 
                 register[a] = ((b + c) % 32768) as u16;
 
@@ -347,6 +392,9 @@ fn run(mut program: Vec<u8>) {
                 if c > 32767 {
                     c = register[c % 32768] as usize;
                 }
+
+                let b = b as u16;
+                let c = c as u16;
 
                 if debug == true {
                     println!("opcode 11: set a to b % c: {} {} {}", a, b, c);
@@ -541,7 +589,7 @@ fn run(mut program: Vec<u8>) {
                 program[a] = lower as u8;
 
                 if debug == true {
-                    println!("opcode 16: {}", program[a]);
+                    println!("opcode 16: {}", b);
                 }
                 ip = ip + 2;
             },
