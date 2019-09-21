@@ -27,14 +27,14 @@ fn run(mut program: Vec<u8>) {
 
     let mut stack:[u16;1028] = [0; 1028];
 
-    let mut counter = 700000;
+    let mut counter = 10000000;
     let mut read_counter = 0;
 
     loop {
         if read_counter > 0 {
             read_counter = read_counter + 1;
         }
-        if counter == 0 {
+        if counter == 0 || read_counter > 20000 {
             // println!("instructions completed {}", op_counter);
             // println!("IP at {}", ip);
             // let mut i = 0;
@@ -54,14 +54,34 @@ fn run(mut program: Vec<u8>) {
             //     }
             // }
             // break;
+            if read_counter > 20000 {
+                println!("read counter > 20000");
+                read_counter = 0;
+            }
             println!("DEBUG> ");
             use std::io;
             let mut input = String::new();
             match io::stdin().read_line(&mut input) {
                 Ok(_) => {
-                    if input == "s\n" {
-                        println!("stepping 100");
-                        counter = 100;
+                    if input == "run\n" {
+                        counter = -1;
+                        continue;
+                    }
+                    if input.starts_with("n") {
+                        let mut argv = input.split_ascii_whitespace();
+                        argv.next();
+                        if let Some(i) = argv.next() {
+                            let i = if let Ok(i) = i.parse::<isize>(){
+                                i
+                            } else {
+                                continue;
+                            };
+                            counter = i;
+                            println!("stepping {}", i);
+                        } else {
+                            println!("stepping 100");
+                            counter = 100;
+                        }
                     }
                     if input == "ss\n" {
                         println!("stepping 1000");
@@ -84,19 +104,82 @@ fn run(mut program: Vec<u8>) {
                         debug = !debug;
                         continue;
                     }
-                    if input == "dump\n" {
-                        println!("dumping program");
-                        if let Ok(_) = fs::write("./out", &program) {
-                            println!("dumped!");
+                    if input.starts_with("save") {
+                        let mut argv = input.split_ascii_whitespace();
+                        argv.next();
+                        if let Some(file) = argv.next() {
+                            let mut offset = 0;
+                            program[0] = 0x16;
+                            offset = offset + 1;
+                            for i in 0..7 { // save the registers
+                                let n = i * 2;
+                                program[offset + n + 1] = (register[i] >> 8) as u8;
+                                program[offset + n] = register[i] as u8;
+                            }
+                            offset = offset + 16;
+                            for i in 0..99 { // save the stack
+                                let n = i * 2;
+                                program[offset + n + 1] = (stack[i] >> 8) as u8;
+                                program[offset + n] = stack[i] as u8;
+                            }
+                            offset = offset + 100;
+                            program[offset] = (sp >> 8) as u8;
+                            program[offset + 1] = sp as u8;
+                            program[offset + 2] = (ip >> 8) as u8;
+                            program[offset + 3] = ip as u8;
+                            println!("saving program to {}", file);
+                            if let Ok(_) = fs::write(file, &program) {
+                                println!("dumped!");
+                            }
+                        } else {
+                            let mut offset = 0;
+                            program[0] = 0x16;
+                            offset = offset + 1;
+                            for i in 0..7 { // save the registers
+                                let n = i * 2;
+                                program[offset + n + 1] = (register[i] >> 8) as u8;
+                                program[offset + n] = register[i] as u8;
+                            }
+                            offset = offset + 16;
+                            for i in 0..99 { // save the stack
+                                let n = i * 2;
+                                program[offset + n + 1] = (stack[i] >> 8) as u8;
+                                program[offset + n] = stack[i] as u8;
+                            }
+                            offset = offset + 100;
+                            program[offset] = (sp >> 8) as u8;
+                            program[offset + 1] = sp as u8;
+                            program[offset + 2] = (ip >> 8) as u8;
+                            program[offset + 3] = ip as u8;
+                            println!("saving program");
+                            if let Ok(_) = fs::write("./out.sav", &program) {
+                                println!("dumped!");
+                            }
                         }
                         continue;
                     }
-                    if input == "stack\n" {
+                    if input.starts_with("dump") {
+                        let mut argv = input.split_ascii_whitespace();
+                        argv.next();
+                        if let Some(file) = argv.next() {
+                            println!("dumping program to {}", file);
+                            if let Ok(_) = fs::write(file, &program) {
+                                println!("dumped!");
+                            }
+                        } else {
+                            println!("dumping program");
+                            if let Ok(_) = fs::write("./out", &program) {
+                                println!("dumped!");
+                            }
+                        }
+                        continue;
+                    }
+                    if input.starts_with("info") {
                         println!("instructions completed {}", op_counter);
-                        println!("IP at {}", ip);
+                        println!("IP at {} {:x}", ip, ip);
                         let mut i = 0;
                         loop {
-                            println!("register {}: {}", i, register[i]);
+                            println!("register {}: {} {:x}", i, register[i], register[i]);
                             i = i + 1;
                             if i > 7 {
                                 break;
@@ -104,7 +187,7 @@ fn run(mut program: Vec<u8>) {
                         }
                         let mut i = 0;
                         loop {
-                            println!("stack {}: {}", i, stack[i]);
+                            println!("stack {}: {} {:x}", i, stack[i], stack[i]);
                             i = i + 1;
                             if i > 10 {
                                 break;
@@ -112,14 +195,78 @@ fn run(mut program: Vec<u8>) {
                         }
                         continue;
                     }
-                    if input == "run\n" {
-                        counter = -1;
+                    if input.starts_with("s") {
+                        let mut argv = input.split_ascii_whitespace();
+                        argv.next();
+                        if let Some(i) = argv.next() {
+                            let i: usize = if let Ok(i) = i.parse::<usize>(){
+                                i
+                            } else {
+                                continue;
+                            };
+                            println!("<{}> = {}", i, stack[i]);
+                            if let Some(value) = argv.next() {
+                                let value: u16 = if let Ok(i) = value.parse::<u16>(){
+                                    i
+                                } else {
+                                    continue;
+                                };
+                                stack[i] = value;
+                                println!("<{}> = {}", i, stack[i]);
+                            }
+                        } else {
+                            let mut i = 0;
+                            loop {
+                                println!("<{}> = {}", i, stack[i]);
+                                i = i + 1;
+                                if i > 40 {
+                                    break;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    if input.starts_with("r") {
+                        let mut argv = input.split_ascii_whitespace();
+                        argv.next();
+                        if let Some(i) = argv.next() {
+                            let i: usize = if let Ok(i) = i.parse::<usize>(){
+                                i
+                            } else {
+                                continue;
+                            };
+                            if i > 7 {
+                                continue;
+                            }
+                            println!("[{}] = {}", i, register[i]);
+                            if let Some(value) = argv.next() {
+                                let value: u16 = if let Ok(i) = value.parse::<u16>(){
+                                    i
+                                } else {
+                                    continue;
+                                };
+                                register[i] = value;
+                                println!("[{}] = {}", i, register[i]);
+                            }
+                        } else {
+                            let mut i = 0;
+                            loop {
+                                println!("[{}] = {}", i, register[i]);
+                                i = i + 1;
+                                if i > 8 {
+                                    break;
+                                }
+                            }
+                        }
+                        continue;
                     }
                 },
                 Err(_) => {}
             }
         } else {
-            counter = counter - 1;
+            if counter > 0 {
+                counter = counter - 1;
+            }
         }
         op_counter = op_counter + 1;
         if DEBUG || debug {
@@ -131,7 +278,23 @@ fn run(mut program: Vec<u8>) {
                     println!("opcode 0: HALT");
                 }
                 println!("instructions completed {}", op_counter);
-                println!("IP at {}", ip);
+                println!("IP at {} {:x}", ip, ip);
+                let mut i = 0;
+                loop {
+                    println!("register {}: {} {:x}", i, register[i], register[i]);
+                    i = i + 1;
+                    if i > 7 {
+                        break;
+                    }
+                }
+                let mut i = 0;
+                loop {
+                    println!("stack {}: {} {:x}", i, stack[i], stack[i]);
+                    i = i + 1;
+                    if i > 10 {
+                        break;
+                    }
+                }
                 break;
             },
             1 => {
@@ -614,7 +777,9 @@ fn run(mut program: Vec<u8>) {
                     println!("opcode 19: PRINT: {}", program[ip] as char);
                     eprint!("{}", program[ip] as char);
                 } else {
-                    print!("{}", program[ip] as char);
+                    let a = read_argument(ip, &program, register);
+                    // eprintln!("opcode 19: PRINT: {} {}", a as u8 as char, a);
+                    print!("{}", a as u8 as char);
                     // eprint!("{}", program[ip] as char);
                 }
                 ip = ip + 2;
@@ -627,8 +792,12 @@ fn run(mut program: Vec<u8>) {
                 ip = ip + 2;
                 let a = write_argument(ip, &program) as usize;
 
-                register[a] = read() as u16;
-
+                let res = read();
+                if res as char == '~' {
+                    counter = 0;
+                    continue;
+                }
+                register[a] = res as u16;
                 // eprintln!("readcounter tripped: {}", read_counter);
                 read_counter = 1;
 
@@ -640,14 +809,69 @@ fn run(mut program: Vec<u8>) {
                 }
                 ip = ip + 2;
             },
+            22 => {
+                if ip > 0 && op_counter > 1 {
+                    panic!("opcode 22 encountered outside of load state")
+                }
+                debug = false;
+                if DEBUG || debug {
+                    println!("opcode 22: LOAD");
+                }
+                ip = ip + 1;
+                for i in 0..7 { // load the registers
+                    let n = i * 2;
+                    let higher = program[ip + n + 1] as u16;
+                    let lower = program[ip + n] as u16;
+                    let value: u16 = higher << 8 | lower;
+                    register[i] = value;
+                }
+                ip = ip + 16;
+                for i in 0..99 { // load the registers
+                    let n = i * 2;
+                    let higher = program[ip + n + 1] as u16;
+                    let lower = program[ip + n] as u16;
+                    let value: u16 = higher << 8 | lower;
+                    stack[i] = value;
+                }
+                ip = ip + 100;
+                let higher = program[ip] as u16;
+                let lower = program[ip + 1] as u16;
+                let value: u16 = higher << 8 | lower;
+                ip = ip + 2;
+                sp = value as usize;
+                let higher = program[ip] as u16;
+                let lower = program[ip + 1] as u16;
+                let value: u16 = higher << 8 | lower;
+                ip = value as usize;
+                if DEBUG || debug {
+                    println!("SP at {} {:x}", sp, sp);
+                    println!("IP at {} {:x}", ip, ip);
+                }
+            },
             c => {
                 println!("opcode {}: err unkown opcode at {} follows: {:x} {:x}", c, ip, program[(ip + 1)], program[(ip + 2)]);
                 println!("instructions completed {}", op_counter);
-                println!("IP at {}", ip);
-                println!("dumping program");
-                if let Ok(_) = fs::write("./out", program) {
-                    println!("dumped!");
+                println!("IP at {} {:x}", ip, ip);
+                let mut i = 0;
+                loop {
+                    println!("register {}: {}", i, register[i]);
+                    i = i + 1;
+                    if i > 7 {
+                        break;
+                    }
                 }
+                let mut i = 0;
+                loop {
+                    println!("stack {}: {}", i, stack[i]);
+                    i = i + 1;
+                    if i > 10 {
+                        break;
+                    }
+                }
+                // println!("dumping program");
+                // if let Ok(_) = fs::write("./out", program) {
+                //     println!("dumped!");
+                // }
                 break;
             }
         }
@@ -657,7 +881,7 @@ fn run(mut program: Vec<u8>) {
 fn read_argument(ip: usize, rom: &Vec<u8>, register:[u16;9] ) -> u16 {
     let higher = rom[ip + 1] as u16;
     let lower = rom[ip] as u16;
-    let debug = true;
+    let debug = false;
 
     let mut argument: u16 = higher << 8 | lower;
     while argument > 32767 {
@@ -673,7 +897,7 @@ fn read_argument(ip: usize, rom: &Vec<u8>, register:[u16;9] ) -> u16 {
 fn write_argument(ip: usize, rom: &Vec<u8>) -> u16 {
     let higher = rom[ip + 1] as u16;
     let lower = rom[ip] as u16;
-    let debug = true;
+    let debug = false;
 
     let mut argument: u16 = higher << 8 | lower;
     if argument > 32767 {
@@ -700,6 +924,6 @@ fn read() -> u8 {
     if let Ok(_) = input.read_exact(&mut reader) {
         return reader[0];
     } else {
-        panic!("fuck");
+        return b'~';
     }
 }
