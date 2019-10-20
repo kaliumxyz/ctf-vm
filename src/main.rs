@@ -3,6 +3,13 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 
+use vm::State;
+use debug::Meta;
+
+mod vm;
+mod util;
+mod debug;
+
 /***
  * TODO:
  *     - pausing the VM from anywhere in the code
@@ -19,8 +26,6 @@ use std::fs;
  *       stepping trough the code.
  *
  ***/
-
-mod vm;
 
 struct InvalidArgError {
     details: String,
@@ -57,6 +62,8 @@ struct Config {
 }
 
 type BoxResult<T> = Result<T, Box<dyn Error>>;
+
+type Deref<T> = *mut T;
 
 fn main() -> BoxResult<()> {
     let args: Vec<String> = env::args().collect();
@@ -114,21 +121,20 @@ fn load(config: &Config) -> BoxResult<Vec<u8>> {
 
 const DEBUG: bool = false;
 
-fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
+fn run(program: Vec<u8>, config: &Config) -> BoxResult<()> {
     // registers
 
-    use vm::State;
-    let state = State::recover(program)?;
-    program = state.program;
-    let mut ip = state.ip;
-    let mut sp = state.sp;
-    let mut register = state.register;
-    let mut op_counter = 0;
+    let mut state = State::recover(program)?;
+    let mut ip = &mut state.ip;
+    let mut sp = &mut state.sp;
+    let meta = Meta::new();
+    let mut ops = meta.op_count;
 
     let mut bp_op = 99;
     let mut bp = 999999999999;
 
-    let mut stack = state.stack;
+    let stack: &mut Vec<u16> = &mut state.stack;
+    let register: &mut [u16;8] = &mut state.register;
 
     let mut counter = 100000000;
     let mut read_counter = 0;
@@ -138,7 +144,7 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
     loop {
         if sp == 1027 {
             println!("sp hit 1027");
-            println!("instructions completed {}", op_counter);
+            println!("instructions completed {}", ops);
             println!("[IP] at {}", ip);
             let mut i = 0;
             loop {
@@ -244,54 +250,54 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                         argv.next();
                         if let Some(file) = argv.next() {
                             let mut offset = 0;
-                            program[0] = 0x16;
+                            state.program[0] = 0x16;
                             offset = offset + 1;
                             for i in 0..7 {
                                 // save the registers
                                 let n = i * 2;
-                                program[offset + n + 1] = (register[i] >> 8) as u8;
-                                program[offset + n] = register[i] as u8;
+                                state.program[offset + n + 1] = (register[i] >> 8) as u8;
+                                state.program[offset + n] = register[i] as u8;
                             }
                             offset = offset + 16;
                             for i in 0..99 {
                                 // save the stack
                                 let n = i * 2;
-                                program[offset + n + 1] = (stack[i] >> 8) as u8;
-                                program[offset + n] = stack[i] as u8;
+                                state.program[offset + n + 1] = (stack[i] >> 8) as u8;
+                                state.program[offset + n] = stack[i] as u8;
                             }
                             offset = offset + 100;
-                            program[offset] = (sp >> 8) as u8;
-                            program[offset + 1] = sp as u8;
-                            program[offset + 2] = (ip >> 8) as u8;
-                            program[offset + 3] = ip as u8;
+                            state.program[offset] = (sp >> 8) as u8;
+                            state.program[offset + 1] = sp as u8;
+                            state.program[offset + 2] = (ip >> 8) as u8;
+                            state.program[offset + 3] = ip as u8;
                             println!("saving program to {}", file);
-                            if let Ok(_) = fs::write(file, &program) {
+                            if let Ok(_) = fs::write(file, &state.program) {
                                 println!("dumped!");
                             }
                         } else {
                             let mut offset = 0;
-                            program[0] = 0x16;
+                            state.program[0] = 0x16;
                             offset = offset + 1;
                             for i in 0..7 {
                                 // save the registers
                                 let n = i * 2;
-                                program[offset + n + 1] = (register[i] >> 8) as u8;
-                                program[offset + n] = register[i] as u8;
+                                state.program[offset + n + 1] = (register[i] >> 8) as u8;
+                                state.program[offset + n] = register[i] as u8;
                             }
                             offset = offset + 16;
                             for i in 0..99 {
                                 // save the stack
                                 let n = i * 2;
-                                program[offset + n + 1] = (stack[i] >> 8) as u8;
-                                program[offset + n] = stack[i] as u8;
+                                state.program[offset + n + 1] = (stack[i] >> 8) as u8;
+                                state.program[offset + n] = stack[i] as u8;
                             }
                             offset = offset + 100;
-                            program[offset] = (sp >> 8) as u8;
-                            program[offset + 1] = sp as u8;
-                            program[offset + 2] = (ip >> 8) as u8;
-                            program[offset + 3] = ip as u8;
+                            state.program[offset] = (sp >> 8) as u8;
+                            state.program[offset + 1] = sp as u8;
+                            state.program[offset + 2] = (ip >> 8) as u8;
+                            state.program[offset + 3] = ip as u8;
                             println!("saving program");
-                            if let Ok(_) = fs::write("./out.sav", &program) {
+                            if let Ok(_) = fs::write("./out.sav", &state.program) {
                                 println!("dumped!");
                             }
                         }
@@ -302,19 +308,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                         argv.next();
                         if let Some(file) = argv.next() {
                             println!("dumping program to {}", file);
-                            if let Ok(_) = fs::write(file, &program) {
+                            if let Ok(_) = fs::write(file, &state.program) {
                                 println!("dumped!");
                             }
                         } else {
                             println!("dumping program");
-                            if let Ok(_) = fs::write("./out", &program) {
+                            if let Ok(_) = fs::write("./out", &state.program) {
                                 println!("dumped!");
                             }
                         }
                         continue;
                     }
                     if input.starts_with("info") {
-                        println!("instructions completed {}", op_counter);
+                        println!("instructions completed {}", ops);
                         println!("IP at {} {:x}", ip, ip);
                         let mut i = 0;
                         loop {
@@ -414,38 +420,20 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                 counter = counter - 1;
             }
         }
-        op_counter = op_counter + 1;
+        ops = ops + 1;
 
         if DEBUG || debug {
-            println!("{} {} {}", ip, op_counter, read_counter);
+            println!("{} {} {}", ip, ops, read_counter);
         }
-        if ip == bp || bp_op == program[ip as usize] as isize {
+        if ip == bp || bp_op == state.program[ip as usize] as isize {
             counter = 0;
             continue;
         }
-        match program[ip as usize] {
+        match state.program[ip as usize] {
             0 => {
-                if DEBUG || debug {
-                    println!("opcode 0: HALT");
-                }
-                println!("instructions completed {}", op_counter);
-                println!("IP at {} {:x}", ip, ip);
-                let mut i = 0;
-                loop {
-                    println!("register {}: {} {:x}", i, register[i], register[i]);
-                    i = i + 1;
-                    if i > 7 {
-                        break;
-                    }
-                }
-                let mut i = 0;
-                loop {
-                    println!("stack {}: {} {:x}", i, stack[i], stack[i]);
-                    i = i + 1;
-                    if i > 10 {
-                        break;
-                    }
-                }
+                state.ip = ip;
+                state.sp = sp;
+                halt(state, meta);
                 break;
             }
             1 => {
@@ -454,12 +442,12 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 register[a] = b;
 
@@ -477,10 +465,10 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a: u16 = read_argument(ip, &program, register);
-                let b: u16 = write_argument(ip, &program);
+                let a: u16 = read_argument(&state);
+                let b: u16 = write_argument(&state);
 
-                stack[sp] = a;
+                stack.push(a);
                 sp = sp + 1;
 
                 ip = ip + 2;
@@ -497,17 +485,20 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 sp = sp - 1;
-                register[a] = stack[sp];
-                stack[sp] = 0;
+                if let Some(data) = stack.pop() {
+                    register[a] = data;
+                } else {
+                    // halt
+                }
 
                 ip = ip + 2;
                 if DEBUG || debug {
                     println!(" RESULT:  [A{}] = <{}>", a, sp);
                     println!("          [A{}] = {}", a, register[a]);
-                    println!("          <{}> = {}", sp, stack[sp]);
+                    // println!("          <{}> = {}", sp, stack[sp]);
                     println!(" [IP SP A{}] <{}>", a, sp);
                 }
             }
@@ -517,19 +508,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 if b == c {
                     register[a] = 1;
@@ -552,19 +543,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 if b > c {
                     register[a] = 1;
@@ -586,7 +577,7 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: JUMP ADDRESS");
                 }
                 ip = ip + 2;
-                let a = read_argument(ip, &program, register) as usize;
+                let a = read_argument(&state) as usize;
 
                 ip = a * 2;
 
@@ -603,13 +594,13 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: CONDITIONAL");
                 }
                 ip = ip + 2;
-                let a: u16 = read_argument(ip, &program, register);
+                let a: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" B: JUMP ADDRESS");
                 }
                 ip = ip + 2;
-                let b = read_argument(ip, &program, register) as usize;
+                let b = read_argument(&state) as usize;
 
                 if a != 0 {
                     ip = b * 2;
@@ -630,13 +621,13 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: CONDITIONAL");
                 }
                 ip = ip + 2;
-                let a: u16 = read_argument(ip, &program, register);
+                let a: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" B: JUMP ADDRESS");
                 }
                 ip = ip + 2;
-                let b = read_argument(ip, &program, register) as usize;
+                let b = read_argument(&state) as usize;
 
                 if a == 0 {
                     ip = b * 2;
@@ -657,19 +648,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 register[a] = (b + c) % 32768;
 
@@ -687,19 +678,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b = read_argument(ip, &program, register) as usize;
+                let b = read_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c = read_argument(ip, &program, register) as usize;
+                let c = read_argument(&state) as usize;
 
                 register[a] = ((b * c) % 32768) as u16;
 
@@ -717,19 +708,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 register[a] = (b % c) % 32768;
 
@@ -747,19 +738,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 register[a] = (b & c) % 32768;
 
@@ -777,19 +768,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 if DEBUG || debug {
                     println!(" C: INTEGER");
                 }
                 ip = ip + 2;
-                let c: u16 = read_argument(ip, &program, register);
+                let c: u16 = read_argument(&state);
 
                 register[a] = (b | c) % 32768;
 
@@ -807,13 +798,13 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 register[a] = (!b) % 32768;
                 ip = ip + 2;
@@ -830,20 +821,20 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 if DEBUG || debug {
                     println!(" B: ADDRESS");
                 }
                 ip = ip + 2;
-                let mut b = read_argument(ip, &program, register) as usize;
+                let mut b = read_argument(&state) as usize;
 
                 b = b * 2;
 
                 if DEBUG || debug {
                     println!(" &B: MEMORY AT B");
                 }
-                let c = read_argument(b, &program, register);
+                let c = read_argument(&state);
 
                 register[a] = c;
 
@@ -861,20 +852,20 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: ADDRESS");
                 }
                 ip = ip + 2;
-                let mut a = read_argument(ip, &program, register) as usize;
+                let mut a = read_argument(&state) as usize;
                 a = a * 2;
 
                 if DEBUG || debug {
                     println!(" B: INTEGER");
                 }
                 ip = ip + 2;
-                let b: u16 = read_argument(ip, &program, register);
+                let b: u16 = read_argument(&state);
 
                 let higher = (b >> 8) as u8;
                 let lower = b as u8;
 
-                program[a + 1] = higher;
-                program[a] = lower;
+                state.program[a + 1] = higher;
+                state.program[a] = lower;
 
                 ip = ip + 2;
                 if DEBUG || debug {
@@ -882,8 +873,8 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!("          b{:b} b{:b}", higher, lower);
                     println!(
                         "          b{:b} b{:b} = b{:b}",
-                        program[a + 1],
-                        program[a],
+                        state.program[a + 1],
+                        state.program[a],
                         b
                     );
                     println!(" [IP PROGRAM]");
@@ -895,10 +886,10 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: ADDRESS");
                 }
                 ip = ip + 2;
-                let a = read_argument(ip, &program, register) as usize;
+                let a = read_argument(&state) as usize;
 
                 ip = ip + 2;
-                stack[sp] = ip as u16 / 2;
+                stack.push(ip as u16 / 2);
                 sp = sp + 1;
 
                 ip = a * 2;
@@ -914,7 +905,7 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     if DEBUG || debug {
                         println!("opcode 18: return: {}", stack[sp]);
                     }
-                    println!("instructions completed {}", op_counter);
+                    println!("instructions completed {}", ops);
                     println!("IP at {}", ip);
                     break;
                 }
@@ -930,11 +921,11 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
             19 => {
                 ip = ip + 2;
                 if DEBUG || debug {
-                    let a = read_argument(ip, &program, register);
-                    println!("opcode 19: PRINT: {}", program[ip]);
+                    let a = read_argument(&state);
+                    println!("opcode 19: PRINT: {}", state.program[ip]);
                     println!("{}", a as u8 as char);
                 } else {
-                    let a = read_argument(ip, &program, register);
+                    let a = read_argument(&state);
                     // eprintln!("opcode 19: PRINT: {} {}", a as u8 as char, a);
                     print!("{}", a as u8 as char);
                     // eprint!("{}", program[ip] as char);
@@ -947,7 +938,7 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     println!(" A: REGISTER");
                 }
                 ip = ip + 2;
-                let a = write_argument(ip, &program) as usize;
+                let a = write_argument(&state) as usize;
 
                 let res = read();
                 if res as char == '~' {
@@ -966,7 +957,7 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                 ip = ip + 2;
             }
             22 => {
-                if ip > 0 && op_counter > 1 {
+                if ip > 0 && ops > 1 {
                     panic!("opcode 22 encountered outside of load state")
                 }
                 debug = false;
@@ -978,8 +969,8 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                 for i in 0..7 {
                     // load the registers
                     let n = i * 2;
-                    let higher = program[ip + n + 1] as u16;
-                    let lower = program[ip + n] as u16;
+                    let higher = state.program[ip + n + 1] as u16;
+                    let lower = state.program[ip + n] as u16;
                     let value: u16 = higher << 8 | lower;
                     register[i] = value;
                 }
@@ -987,19 +978,19 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                 for i in 0..99 {
                     // load the registers
                     let n = i * 2;
-                    let higher = program[ip + n + 1] as u16;
-                    let lower = program[ip + n] as u16;
+                    let higher = state.program[ip + n + 1] as u16;
+                    let lower = state.program[ip + n] as u16;
                     let value: u16 = higher << 8 | lower;
                     stack[i] = value;
                 }
                 ip = ip + 100;
-                let higher = program[ip] as u16;
-                let lower = program[ip + 1] as u16;
+                let higher = state.program[ip] as u16;
+                let lower = state.program[ip + 1] as u16;
                 let value: u16 = higher << 8 | lower;
                 ip = ip + 2;
                 sp = value as usize;
-                let higher = program[ip] as u16;
-                let lower = program[ip + 1] as u16;
+                let higher = state.program[ip] as u16;
+                let lower = state.program[ip + 1] as u16;
                 let value: u16 = higher << 8 | lower;
                 ip = value as usize;
                 if DEBUG || debug {
@@ -1012,10 +1003,10 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
                     "opcode {}: err unkown opcode at {} follows: {:x} {:x}",
                     c,
                     ip,
-                    program[(ip + 1)],
-                    program[(ip + 2)]
+                    state.program[(ip + 1)],
+                    state.program[(ip + 2)]
                 );
-                println!("instructions completed {}", op_counter);
+                println!("instructions completed {}", ops);
                 println!("IP at {} {:x}", ip, ip);
                 let mut i = 0;
                 loop {
@@ -1045,40 +1036,38 @@ fn run(mut program: Vec<u8>, config: &Config) -> BoxResult<()> {
     Ok(())
 }
 
-fn read_argument(ip: usize, rom: &Vec<u8>, register: [u16; 8]) -> u16 {
-    let higher = rom[ip + 1] as u16;
-    let lower = rom[ip] as u16;
-    let debug = false;
+fn read_argument(state: &State) -> u16 {
+    let higher = state.program[state.ip + 1] as u16;
+    let lower = state.program[state.ip] as u16;
 
     let mut argument: u16 = higher << 8 | lower;
-    if DEBUG || debug {
+    if DEBUG || state.debug {
         println!("read_argument found number {}", argument);
     }
     while argument > 32767 {
         let index = argument as usize;
-        if DEBUG || debug {
+        if DEBUG || state.debug {
             println!("               reguested contents of [{}]", index % 32768);
         }
-        argument = register[index % 32768];
-        if DEBUG || debug {
+        argument = state.register[index % 32768];
+        if DEBUG || state.debug {
             println!("                    content {}", argument);
         }
     }
     return argument;
 }
 
-fn write_argument(ip: usize, rom: &Vec<u8>) -> u16 {
-    let higher = rom[ip + 1] as u16;
-    let lower = rom[ip] as u16;
-    let debug = false;
+fn write_argument(state: &State) -> u16 {
+    let higher = state.program[state.ip + 1] as u16;
+    let lower = state.program[state.ip] as u16;
 
     let mut argument: u16 = higher << 8 | lower;
-    if DEBUG || debug {
+    if DEBUG || state.debug {
         println!("write_argument found number {}", argument);
     }
     if argument > 32767 {
         argument = argument % 32768;
-        if DEBUG || debug {
+        if DEBUG || state.debug {
             println!("                request is to register [{}]", argument);
         }
     }
@@ -1100,5 +1089,32 @@ fn read() -> u8 {
         return reader[0];
     } else {
         return b'~';
+    }
+}
+
+fn halt(state: State, meta: Meta) {
+    let register = state.register;
+    let stack = state.stack.clone();
+    let ip = state.ip;
+    if DEBUG || state.debug {
+        println!("opcode 0: HALT");
+    }
+    println!("instructions completed {}", meta.op_count);
+    println!("IP at {} {:x}", ip, ip);
+    let mut i = 0;
+    loop {
+        println!("register {}: {} {:x}", i, register[i], register[i]);
+        i = i + 1;
+        if i > 7 {
+            break;
+        }
+    }
+    let mut i = 0;
+    loop {
+        println!("stack {}: {} {:x}", i, stack[i], stack[i]);
+        i = i + 1;
+        if i > 10 {
+            break;
+        }
     }
 }

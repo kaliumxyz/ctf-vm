@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt;
+use crate::util::to_u16;
 
 type BoxResult<T> = Result<T,Box<dyn Error>>;
 
@@ -37,6 +38,7 @@ pub struct State {
     pub sp: usize,
     pub ip: usize,
     pub stack: Vec<u16>,
+    pub debug: bool,
 }
 
 impl State {
@@ -47,6 +49,7 @@ impl State {
             sp: 0,
             ip: 0,
             stack: Vec::new(),
+            debug: false,
         }
     }
 
@@ -143,8 +146,4 @@ fn recover_legacy(program: Vec<u8>) -> BoxResult<State> {
     state.ip = value as usize;
 
     Ok(state)
-}
-
-fn to_u16 (higher: u8, lower: u8) -> u16 {
-    return (higher as u16) << 8 | lower as u16;
 }
