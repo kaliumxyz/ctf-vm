@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 use crate::util::to_u16;
 
-type BoxResult<T> = Result<T,Box<dyn Error>>;
+pub type BoxResult<T> = Result<T,Box<dyn Error>>;
 
 struct RecoveryError {
     details: String
@@ -74,25 +74,26 @@ impl State {
 
         header.remove(0); // remove 0x17
 
-        for i in 0..7 { // load the registers
+        state.sp = to_u16(header[0], header[1]) as usize;
+        header.drain(0..2);
+        state.ip = to_u16(header[0], header[1]) as usize;
+        header.drain(0..2);
+
+        for i in 0..8 { // load the registers
             let n = i * 2;
             state.register[i] = to_u16(header[n], header[n + 1]);
         }
-        header.drain(0..15);
-        for i in 0..1027 { // load the stack
+        header.drain(0..16);
+        for i in 0..1028 { // load the stack
             let n = i * 2;
-            state.stack[i] = to_u16(header[n], header[n + 1]);
+            state.stack.push(to_u16(header[n], header[n + 1]))
         }
-        header.drain(0..2055);
-        state.sp = to_u16(header[0], header[1]) as usize;
-        header.drain(0..1);
-        state.ip = to_u16(header[0], header[1]) as usize;
+        header.drain(0..2057);
 
         Ok(state)
     }
 
-    pub fn save(state: State) -> Vec<u8> {
-        let mut program = state.program;
+    pub fn save(state: &State) -> Vec<u8> {
         let mut save:Vec<u8> = Vec::new();
 
         save.push(0x17); // if 23 is encountered, we know its a save file, 22 is legacy
@@ -100,18 +101,18 @@ impl State {
         save.push(state.sp as u8);
         save.push((state.ip >> 8)  as u8);
         save.push(state.ip as u8);
-        for i in 0..7 { // save the registers
+        for i in 0..8 { // save the registers
             save.push((state.register[i] >> 8) as u8);
             save.push(state.register[i] as u8);
         }
-        for i in 0..1027 { // save the stack
+        for i in 0..state.stack.len() { // save the stack
             save.push((state.stack[i] >> 8) as u8);
             save.push(state.stack[i] as u8);
         }
         if save.len() < 10000 {
             save.append(&mut Vec::<u8>::with_capacity(10000 - save.len()));
         }
-        save.append(&mut program);
+        save.append(&mut state.program.clone());
         return save;
     }
 }
