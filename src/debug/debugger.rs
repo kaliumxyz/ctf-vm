@@ -6,7 +6,8 @@ use std::fs;
 use std::io;
 use std::io::Write;
 
-enum Command {
+#[derive(PartialEq, Clone)]
+pub enum Command {
     Save(String),
     // Load(String),
     Help,
@@ -19,8 +20,14 @@ enum Command {
     RegisterGetN(usize),
     StackSet(usize, u16),
     StackGet,
+    BreakPointOpSet(u8),
+    BreakPointOpGet,
     StackGetN(usize),
     Null,
+    Noop,
+    PrintMemory,
+    PrintMemoryRange(usize,usize),
+    PrintMemoryX(usize),
     Halt,
 }
 
@@ -34,16 +41,56 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
         io::stdout().flush()?; // flushing to ensure that DEBUG> gets printed before the read_line
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        let command = match lex(input) {
+        let mut command = match lex(input) {
             Ok(command) => command,
             Err(error) => {
                 eprintln!("{}", error);
-                Command::Null
+                Command::Noop
             }
         };
+
+        if command == Command::Null {
+            command = meta.last.clone();
+        } else {
+            meta.last = command.clone();
+        }
+
         match command {
             Command::Run => {
                 break;
+            }
+            Command::Noop => {
+            }
+            Command::PrintMemory => {
+                for n in state.program.clone() {
+                    println!("{}", n);
+                }
+            }
+            Command::PrintMemoryRange(mut n, m) => {
+                loop {
+                    if n > m {
+                        break;
+                    }
+                    println!("{}", state.program[n]);
+                    n = n + 1;
+                }
+            }
+            Command::PrintMemoryX(m) => {
+                let mut n = state.ip;
+                loop {
+                    if n > m {
+                        break;
+                    }
+                    println!("{}", state.program[n]);
+                    n = n + 1;
+                }
+            }
+            Command::BreakPointOpSet(op) => {
+                meta.break_op = op;
+                println!("DEBUG: {}", meta.break_op);
+            }
+            Command::BreakPointOpGet => {
+                println!("DEBUG: {}", meta.break_op);
             }
             Command::DebugSet(value) => {
                 meta.debug = value;
@@ -68,8 +115,10 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
             Command::Step(n) => {
                 if n > 0 {
                     println!("stepping {}", n);
+                    meta.debugging = true;
                 } else {
                     println!("step");
+                    meta.debugging = true;
                 }
                 //         meta.counters.push(100);
                 return Ok(())
@@ -89,163 +138,15 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
             Command::StackGetN(index) => {
                 println!("DEBUG: {:?}", state.stack[index]);
             }
-            Command::Null => {}
+            Command::Null => {
+            }
             Command::Halt => {
                 meta.halt = !meta.halt;
+                println!("DEBUG: halt set to: {}", meta.halt);
             }
         }
     }
     Ok(())
-    // if input.starts_with("n") || input.starts_with("step") {
-    //     let mut argv = input.split_ascii_whitespace();
-    //     argv.next();
-    //     if let Some(i) = argv.next() {
-    //         let i = if let Ok(i) = i.parse::<isize>() {
-    //             i
-    //         } else {
-    //             return Ok(());
-    //         };
-    //     }
-    // }
-    // if input.starts_with("breakpoint") {
-    //     let mut argv = input.split_ascii_whitespace();
-    //     argv.next();
-    //     if let Some(i) = argv.next() {
-    //         if i.starts_with("op") {
-    //             argv.next();
-    //             if let Some(i) = argv.next() {
-    //                 if let Ok(i) = i.parse::<isize>() {
-    //                     meta.break_op = i as u8;
-    //                 } else {
-    //                     return Ok(());
-    //                 };
-    //             }
-    //         }
-    //         if let Ok(i) = i.parse::<usize>() {
-    //             meta.breakpoints.push(i);
-    //         } else {
-    //             return Ok(());
-    //         };
-    //         println!("breakpoint set at memory address {}", i);
-    //     } else {
-    //         println!("Useage: breakpoint [memory address | opcode]");
-    //     }
-    //     return Ok(());
-    // }
-    // if input == "debug\n" {
-    //     println!("debug set");
-    //     meta.debug = !meta.debug;
-    //     return Ok(());
-    // }
-    // if input.starts_with("dump") {
-    //     let mut argv = input.split_ascii_whitespace();
-    //     argv.next();
-    //     if let Some(file) = argv.next() {
-    //         println!("dumping program to {}", file);
-    //         if let Ok(_) = fs::write(file, &state.program) {
-    //             println!("dumped!");
-    //         }
-    //     } else {
-    //         println!("dumping program");
-    //         if let Ok(_) = fs::write("./out", &state.program) {
-    //             println!("dumped!");
-    //         }
-    //     }
-    //     return Ok(());
-    // }
-    // if input.starts_with("info") {
-    //     println!("instructions completed {}", meta.op_count);
-    //     println!("IP at {} {:x}", state.ip, state.ip);
-    //     let mut i = 0;
-    //     loop {
-    //         println!("state.register {}: {} {:x}", i, state.register[i], state.register[i]);
-    //         i = i + 1;
-    //         if i > 7 {
-    //             break;
-    //         }
-    //     }
-    //     let mut i = 0;
-    //     loop {
-    //         println!("stack {}: {} {:x}", i, state.stack[i], state.stack[i]);
-    //         i = i + 1;
-    //         if i > 10 {
-    //             break;
-    //         }
-    //     }
-    //     return Ok(());
-    // }
-    // if input.starts_with("s") {
-    //     let mut argv = input.split_ascii_whitespace();
-    //     argv.next();
-    //     if let Some(i) = argv.next() {
-    //         let mut i: usize = if let Ok(i) = i.parse::<usize>() {
-    //             i
-    //         } else {
-    //             return Ok(());
-    //         };
-    //         println!("<{}> = {}", i, state.stack[i]);
-    //         if let Some(value) = argv.next() {
-    //             let value: u16 = if let Ok(i) = value.parse::<u16>() {
-    //                 i
-    //             } else {
-    //                 return Ok(());
-    //             };
-    //             state.stack[i] = value;
-    //             println!("<{}> = {}", i, state.stack[i]);
-    //         }
-    //         loop {
-    //             println!("<{}> = {}", i, state.stack[i]);
-    //             i = i - 1;
-    //             if i == 0 {
-    //                 break;
-    //             }
-    //         }
-    //     } else {
-    //         let mut i = 0;
-    //         loop {
-    //             println!("<{}> = {}", i, state.stack[i]);
-    //             i = i + 1;
-    //             if i > 40 {
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     return Ok(());
-    // }
-    // if input.starts_with("r") {
-    //     let mut argv = input.split_ascii_whitespace();
-    //     argv.next();
-    //     if let Some(i) = argv.next() {
-    //         let i: usize = if let Ok(i) = i.parse::<usize>() {
-    //             i
-    //         } else {
-    //             return Ok(());
-    //         };
-    //         if i > 7 {
-    //             return Ok(());
-    //         }
-    //         println!("[{}] = {}", i, state.register[i]);
-    //         if let Some(value) = argv.next() {
-    //             let value: u16 = if let Ok(i) = value.parse::<u16>() {
-    //                 i
-    //             } else {
-    //                 return Ok(());
-    //             };
-    //             state.register[i] = value;
-    //             println!("[{}] = {}", i, state.register[i]);
-    //         }
-    //     } else {
-    //         let mut i = 0;
-    //         loop {
-    //             println!("[{}] = {}", i, state.register[i]);
-    //             i = i + 1;
-    //             if i > 8 {
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     return Ok(());
-    // }
 }
 
 fn lex(line: String) -> BoxResult<Command> {
@@ -263,6 +164,19 @@ fn lex(line: String) -> BoxResult<Command> {
                     Ok(Command::Step(0))
                 }
             }
+            "m" | "memory" => {
+                if let Some(arg) = argv.next() {
+                    let n = arg.parse::<usize>()?;
+                    if let Some(arg2) = argv.next() {
+                        let m = arg2.parse::<usize>()?;
+                        Ok(Command::PrintMemoryRange(n, m))
+                    } else {
+                        Ok(Command::PrintMemoryX(n))
+                    }
+                } else {
+                    Ok(Command::PrintMemory)
+                }
+            }
             "s" | "stack" => {
                 if let Some(arg) = argv.next() {
                     let n = arg.parse::<usize>()?;
@@ -273,6 +187,18 @@ fn lex(line: String) -> BoxResult<Command> {
             }
             "run" => {
                 Ok(Command::Run)
+            }
+            "fuck" => {
+                println!("command fuck not given");
+                Ok(Command::Noop)
+            }
+            "op" | "bp" | "bp op" => {
+                if let Some(arg) = argv.next() {
+                    let n = arg.parse::<u8>()?;
+                    Ok(Command::BreakPointOpSet(n))
+                } else {
+                    Ok(Command::BreakPointOpGet)
+                }
             }
             "r" | "register" => {
                 if let Some(register) = argv.next() {
@@ -294,10 +220,10 @@ fn lex(line: String) -> BoxResult<Command> {
             "debug" => {
                 if let Some(status) = argv.next() {
                     match status {
-                        "true" | "1" | "t" | "True" => {
+                        "true" | "1" | "t" | "True" | "on" | "On" => {
                             Ok(Command::DebugSet(true))
                         }
-                        "false" | "0" | "f" | "False" => {
+                        "false" | "0" | "f" | "False" | "off" | "Off" => {
                             Ok(Command::DebugSet(false))
                         }
                         _ => Err(Box::new(Error::new(ErrorKind::NotFound, format!("value {} is invalid, must be boolean", status))))

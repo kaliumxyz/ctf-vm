@@ -1,47 +1,3 @@
-// halt: 0
-//   stop execution and terminate the program
-// set: 1 a b
-//   set register <a> to the value of <b>
-// push: 2 a
-//   push <a> onto the stack
-// pop: 3 a
-//   remove the top element from the stack and write it into <a>; empty stack = error
-// eq: 4 a b c
-//   set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
-// gt: 5 a b c
-//   set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
-// jmp: 6 a
-//   jump to <a>
-// jt: 7 a b
-//   if <a> is nonzero, jump to <b>
-// jf: 8 a b
-//   if <a> is zero, jump to <b>
-// add: 9 a b c
-//   assign into <a> the sum of <b> and <c> (modulo 32768)
-// mult: 10 a b c
-//   store into <a> the product of <b> and <c> (modulo 32768)
-// mod: 11 a b c
-//   store into <a> the remainder of <b> divided by <c>
-// and: 12 a b c
-//   stores into <a> the bitwise and of <b> and <c>
-// or: 13 a b c
-//   stores into <a> the bitwise or of <b> and <c>
-// not: 14 a b
-//   stores 15-bit bitwise inverse of <b> in <a>
-// rmem: 15 a b
-//   read memory at address <b> and write it to <a>
-// wmem: 16 a b
-//   write the value from <b> into memory at address <a>
-// call: 17 a
-//   write the address of the next instruction to the stack and jump to <a>
-// ret: 18
-//   remove the top element from the stack and jump to it; empty stack = halt
-// out: 19 a
-//   write the character represented by ascii code <a> to the terminal
-// in: 20 a
-//   read a character from the terminal and write its ascii code to <a>; it can be assumed that once input starts, it will continue until a newline is encountered; this means that you can safely read whole lines from the keyboard and trust that they will be fully read
-// noop: 21
-//   no operation
 
 use crate::util::read;
 use crate::util::read_x;
@@ -53,27 +9,71 @@ use crate::util::write_argument;
 
 #[derive(Debug)]
 pub enum Code {
+    /// halt: 0
+    ///   stop execution and terminate the program
     Halt,
+    /// set: 1 a b
+    ///   set register <a> to the value of <b>
     Set(u8, u8),
+    /// push: 2 a
+    ///   push <a> onto the stack
     Push(u8),
+    /// pop: 3 a
+    ///   remove the top element from the stack and write it into <a>; empty stack = error
     Pop(u8),
-    Eq(u8, u8, u8),
-    Gt(u8, u8, u8),
-    Jmp(u8),
-    Jt(u8, u8),
-    Jf(u8, u8),
+    /// eq: 4 a b c
+    ///   set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
+    Equals(u8, u8, u8),
+    /// gt: 5 a b c
+    ///   set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
+    GreaterThan(u8, u8, u8),
+    /// jmp: 6 a
+    ///   jump to <a>
+    Jump(u8),
+    /// jt: 7 a b
+    ///   if <a> is nonzero, jump to <b>
+    JumpIfTrue(u8, u8),
+    /// jf: 8 a b
+    ///   if <a> is zero, jump to <b>
+    JumpIfFalse(u8, u8),
+    /// add: 9 a b c
+    ///   assign into <a> the sum of <b> and <c> (modulo 32768)
     Add(u8, u8, u8),
-    Mult(u8, u8, u8),
-    Mod(u8, u8, u8),
+    /// mult: 10 a b c
+    ///   store into <a> the product of <b> and <c> (modulo 32768)
+    Multiply(u8, u8, u8),
+    /// mod: 11 a b c
+    ///   store into <a> the remainder of <b> divided by <c>
+    Modulo(u8, u8, u8),
+    /// and: 12 a b c
+    ///   stores into <a> the bitwise and of <b> and <c>
     And(u8, u8, u8),
+    /// or: 13 a b c
+    ///   stores into <a> the bitwise or of <b> and <c>
     Or(u8, u8, u8),
+    /// not: 14 a b
+    ///   stores 15-bit bitwise inverse of <b> in <a>
     Not(u8, u8),
-    Rmem(u8, u8),
-    Wmem(u8, u8),
+    /// rmem: 15 a b
+    ///   read memory at address <b> and write it to <a>
+    ReadMemory(u8, u8),
+    /// wmem: 16 a b
+    ///   write the value from <b> into memory at address <a>
+    WriteMemory(u8, u8),
+    /// call: 17 a
+    ///   write the address of the next instruction to the stack and jump to <a>
     Call(u8),
-    Ret,
+    /// ret: 18
+    ///   remove the top element from the stack and jump to it; empty stack = halt
+    Return,
+    /// out: 19 a
+    ///   write the character represented by ascii code <a> to the terminal
     Out(u8),
+    /// in: 20 a
+    ///   read a character from the terminal and write its ascii code to <a>; it can be assumed that once input starts, it will continue until a newline is encountered; this means that you can safely read whole lines from the keyboard and trust that they will be fully read
     In(u8),
+    /// noop: 21
+    ///   no operation
     Noop,
     Unknown,
 }
@@ -85,21 +85,21 @@ pub fn parse(program: &Vec<u8>, ip: &usize)  -> Code {
         1 => Code::Set(program[ip+1], program[ip+2]),
         2 => Code::Push(program[ip+1]),
         3 => Code::Pop(program[ip+1]),
-        4 => Code::Eq(program[ip+1], program[ip+2], program[ip+3]),
-        5 => Code::Gt(program[ip+1], program[ip+2], program[ip+3]),
-        6 => Code::Jmp(program[ip+1]),
-        7 => Code::Jt(program[ip+1], program[ip+2]),
-        8 => Code::Jf(program[ip+1], program[ip+2]),
+        4 => Code::Equals(program[ip+1], program[ip+2], program[ip+3]),
+        5 => Code::GreaterThan(program[ip+1], program[ip+2], program[ip+3]),
+        6 => Code::Jump(program[ip+1]),
+        7 => Code::JumpIfTrue(program[ip+1], program[ip+2]),
+        8 => Code::JumpIfFalse(program[ip+1], program[ip+2]),
         9 => Code::Add(program[ip+1], program[ip+2], program[ip+3]),
-        10 => Code::Mult(program[ip+1], program[ip+2], program[ip+3]),
-        11 => Code::Mod(program[ip+1], program[ip+2], program[ip+3]),
+        10 => Code::Multiply(program[ip+1], program[ip+2], program[ip+3]),
+        11 => Code::Modulo(program[ip+1], program[ip+2], program[ip+3]),
         12 => Code::And(program[ip+1], program[ip+2], program[ip+3]),
         13 => Code::Or(program[ip+1], program[ip+2], program[ip+3]),
         14 => Code::Not(program[ip+1], program[ip+2]),
-        15 => Code::Rmem(program[ip+1], program[ip+2]),
-        16 => Code::Wmem(program[ip+1], program[ip+2]),
+        15 => Code::ReadMemory(program[ip+1], program[ip+2]),
+        16 => Code::WriteMemory(program[ip+1], program[ip+2]),
         17 => Code::Call(program[ip+1]),
-        18 => Code::Ret,
+        18 => Code::Return,
         19 => Code::Out(program[ip+1]),
         20 => Code::In(program[ip+1]),
         21 => Code::Noop,
@@ -592,7 +592,7 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
                     println!("opcode 18: RETURN: {}", state.stack[state.sp] * 2);
                 }
                 state.ip = state.stack[state.sp] as usize * 2;
-                state.stack[state.sp] = 0;
+                state.stack.pop();
             }
             19 => {
                 state.ip = state.ip + 2;
@@ -618,7 +618,7 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
 
                 let res = read();
                 if res as char == '~' {
-                    meta.debug = true;
+                    meta.debugging = true;
                     state.ip = state.ip - 2;
                 } else {
                     state.register[a] = res as u16;
@@ -631,78 +631,60 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
                 }
                 state.ip = state.ip + 2;
             }
-            22 => {
-                if state.ip > 0 && meta.op_count > 1 {
-                    panic!("opcode 22 encountered outside of load state")
-                }
-                if meta.debug {
-                    println!("opcode 22: LOAD");
-                }
-                println!("opcode 22: LOAD");
-                state.ip = state.ip + 1;
-                for i in 0..7 {
-                    // load the state.registers
-                    let n = i * 2;
-                    let higher = state.program[state.ip + n + 1] as u16;
-                    let lower = state.program[state.ip + n] as u16;
-                    let value: u16 = higher << 8 | lower;
-                    state.register[i] = value;
-                }
-                state.ip = state.ip + 16;
-                for i in 0..99 {
-                    // load the state.registers
-                    let n = i * 2;
-                    let higher = state.program[state.ip + n + 1] as u16;
-                    let lower = state.program[state.ip + n] as u16;
-                    let value: u16 = higher << 8 | lower;
-                    state.stack[i] = value;
-                }
-                state.ip = state.ip + 100;
-                let higher = state.program[state.ip] as u16;
-                let lower = state.program[state.ip + 1] as u16;
-                let value: u16 = higher << 8 | lower;
-                state.ip = state.ip + 2;
-                state.sp = value as usize;
-                let higher = state.program[state.ip] as u16;
-                let lower = state.program[state.ip + 1] as u16;
-                let value: u16 = higher << 8 | lower;
-                state.ip = value as usize;
-                if meta.debug {
-                    println!("SP at {} {:x}", state.sp, state.sp);
-                    println!("IP at {} {:x}", state.ip, state.ip);
-                }
-            }
+            // 22 => {
+            //     if state.ip > 0 && meta.op_count > 1 {
+            //         panic!("opcode 22 encountered outside of load state")
+            //     }
+            //     if meta.debug {
+            //         println!("opcode 22: LOAD");
+            //     }
+            //     println!("opcode 22: LOAD");
+            //     state.ip = state.ip + 1;
+            //     for i in 0..7 {
+            //         // load the state.registers
+            //         let n = i * 2;
+            //         let higher = state.program[state.ip + n + 1] as u16;
+            //         let lower = state.program[state.ip + n] as u16;
+            //         let value: u16 = higher << 8 | lower;
+            //         state.register[i] = value;
+            //     }
+            //     state.ip = state.ip + 16;
+            //     for i in 0..99 {
+            //         // load the state.registers
+            //         let n = i * 2;
+            //         let higher = state.program[state.ip + n + 1] as u16;
+            //         let lower = state.program[state.ip + n] as u16;
+            //         let value: u16 = higher << 8 | lower;
+            //         state.stack[i] = value;
+            //     }
+            //     state.ip = state.ip + 100;
+            //     let higher = state.program[state.ip] as u16;
+            //     let lower = state.program[state.ip + 1] as u16;
+            //     let value: u16 = higher << 8 | lower;
+            //     state.ip = state.ip + 2;
+            //     state.sp = value as usize;
+            //     let higher = state.program[state.ip] as u16;
+            //     let lower = state.program[state.ip + 1] as u16;
+            //     let value: u16 = higher << 8 | lower;
+            //     state.ip = value as usize;
+            //     if meta.debug {
+            //         println!("SP at {} {:x}", state.sp, state.sp);
+            //         println!("IP at {} {:x}", state.ip, state.ip);
+            //     }
+            // }
             c => {
                 println!(
-                    "opcode {}: err unkown opcode at {} follows: {:x} {:x}",
+                    "opcode {}: err unknown opcode at {} follows: {:x} {:x}",
                     c,
                     state.ip,
                     state.program[(state.ip + 1)],
                     state.program[(state.ip + 2)]
                 );
-                println!("instructions completed {}", meta.op_count);
-                println!("IP at {} {:x}", state.ip, state.ip);
-                let mut i = 0;
-                loop {
-                    println!("state.register {}: {}", i, state.register[i]);
-                    i = i + 1;
-                    if i > 7 {
-                        break;
-                    }
-                }
-                let mut i = 0;
-                loop {
-                    println!("stack {}: {}", i, state.stack[i]);
-                    i = i + 1;
-                    if i > 10 {
-                        break;
-                    }
-                }
                 // println!("dumping program");
                 // if let Ok(_) = fs::write("./out", program) {
                 //     println!("dumped!");
                 // }
-                meta.halt = true;
+                meta.debugging = true;
             }
         }
 }

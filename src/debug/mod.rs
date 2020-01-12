@@ -1,14 +1,19 @@
+use crate::debug::debugger::Command;
 use std::fmt;
+use crate::opcode::Code;
 
 pub mod debugger;
+
 
 pub struct Meta {
     pub op_count: usize,
     pub breakpoint: bool,
     pub debug: bool,
+    pub debugging: bool,
     pub breakpoints: Vec<usize>,
     pub break_op: u8,
     pub halt: bool,
+    pub last: Command,
     pub counters: Vec<usize>,
 }
 
@@ -17,10 +22,12 @@ impl Meta {
         return Meta {
             op_count: 0,
             breakpoint: true,
+            debugging: false,
             breakpoints: Vec::new(),
             counters: Vec::new(),
             break_op: 0,
             halt: false,
+            last: Command::Null,
             debug: false,
         }
     }

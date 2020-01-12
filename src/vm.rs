@@ -109,7 +109,7 @@ impl State {
             save.push((state.stack[i] >> 8) as u8);
             save.push(state.stack[i] as u8);
         }
-        if save.len() < 10000 {
+        if save.len() < 10000 { // TODO: use an end symbol instead
             save.append(&mut Vec::<u8>::with_capacity(10000 - save.len()));
         }
         save.append(&mut state.program.clone());
@@ -118,6 +118,7 @@ impl State {
 }
 
 fn recover_legacy(program: Vec<u8>) -> BoxResult<State> {
+    println!("legacy recovery");
     let mut ip = 1;
     let mut state = State::new(program.clone());
     for i in 0..7 { // load the registers
@@ -128,7 +129,7 @@ fn recover_legacy(program: Vec<u8>) -> BoxResult<State> {
         state.register[i] = value;
     }
     ip = ip + 16;
-    for i in 0..99 { // load the registers
+    for i in 0..99 { // load the stack
         let n = i * 2;
         let higher = program[ip + n + 1] as u16;
         let lower = program[ip + n] as u16;
