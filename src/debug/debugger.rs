@@ -21,6 +21,7 @@ enum Command {
     StackGet,
     StackGetN(usize),
     Null,
+    Halt,
 }
 
 pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
@@ -89,6 +90,9 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
                 println!("DEBUG: {:?}", state.stack[index]);
             }
             Command::Null => {}
+            Command::Halt => {
+                meta.halt = !meta.halt;
+            }
         }
     }
     Ok(())
@@ -304,6 +308,9 @@ fn lex(line: String) -> BoxResult<Command> {
             }
             "help" | "man" | "?" => {
                 Ok(Command::Help)
+            }
+            "halt" => {
+                Ok(Command::Halt)
             }
             "save" => {
                 if let Some(path) = argv.next() {

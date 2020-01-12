@@ -1,0 +1,708 @@
+// halt: 0
+//   stop execution and terminate the program
+// set: 1 a b
+//   set register <a> to the value of <b>
+// push: 2 a
+//   push <a> onto the stack
+// pop: 3 a
+//   remove the top element from the stack and write it into <a>; empty stack = error
+// eq: 4 a b c
+//   set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
+// gt: 5 a b c
+//   set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
+// jmp: 6 a
+//   jump to <a>
+// jt: 7 a b
+//   if <a> is nonzero, jump to <b>
+// jf: 8 a b
+//   if <a> is zero, jump to <b>
+// add: 9 a b c
+//   assign into <a> the sum of <b> and <c> (modulo 32768)
+// mult: 10 a b c
+//   store into <a> the product of <b> and <c> (modulo 32768)
+// mod: 11 a b c
+//   store into <a> the remainder of <b> divided by <c>
+// and: 12 a b c
+//   stores into <a> the bitwise and of <b> and <c>
+// or: 13 a b c
+//   stores into <a> the bitwise or of <b> and <c>
+// not: 14 a b
+//   stores 15-bit bitwise inverse of <b> in <a>
+// rmem: 15 a b
+//   read memory at address <b> and write it to <a>
+// wmem: 16 a b
+//   write the value from <b> into memory at address <a>
+// call: 17 a
+//   write the address of the next instruction to the stack and jump to <a>
+// ret: 18
+//   remove the top element from the stack and jump to it; empty stack = halt
+// out: 19 a
+//   write the character represented by ascii code <a> to the terminal
+// in: 20 a
+//   read a character from the terminal and write its ascii code to <a>; it can be assumed that once input starts, it will continue until a newline is encountered; this means that you can safely read whole lines from the keyboard and trust that they will be fully read
+// noop: 21
+//   no operation
+
+use crate::util::read;
+use crate::util::read_x;
+use crate::util::read_argument;
+use crate::halt;
+use crate::debug::Meta;
+use crate::vm::State;
+use crate::util::write_argument;
+
+#[derive(Debug)]
+pub enum Code {
+    Halt,
+    Set(u8, u8),
+    Push(u8),
+    Pop(u8),
+    Eq(u8, u8, u8),
+    Gt(u8, u8, u8),
+    Jmp(u8),
+    Jt(u8, u8),
+    Jf(u8, u8),
+    Add(u8, u8, u8),
+    Mult(u8, u8, u8),
+    Mod(u8, u8, u8),
+    And(u8, u8, u8),
+    Or(u8, u8, u8),
+    Not(u8, u8),
+    Rmem(u8, u8),
+    Wmem(u8, u8),
+    Call(u8),
+    Ret,
+    Out(u8),
+    In(u8),
+    Noop,
+    Unknown,
+}
+
+/// get the opcode and arguments
+pub fn parse(program: &Vec<u8>, ip: &usize)  -> Code {
+    match program[*ip] {
+        0 => Code::Halt,
+        1 => Code::Set(program[ip+1], program[ip+2]),
+        2 => Code::Push(program[ip+1]),
+        3 => Code::Pop(program[ip+1]),
+        4 => Code::Eq(program[ip+1], program[ip+2], program[ip+3]),
+        5 => Code::Gt(program[ip+1], program[ip+2], program[ip+3]),
+        6 => Code::Jmp(program[ip+1]),
+        7 => Code::Jt(program[ip+1], program[ip+2]),
+        8 => Code::Jf(program[ip+1], program[ip+2]),
+        9 => Code::Add(program[ip+1], program[ip+2], program[ip+3]),
+        10 => Code::Mult(program[ip+1], program[ip+2], program[ip+3]),
+        11 => Code::Mod(program[ip+1], program[ip+2], program[ip+3]),
+        12 => Code::And(program[ip+1], program[ip+2], program[ip+3]),
+        13 => Code::Or(program[ip+1], program[ip+2], program[ip+3]),
+        14 => Code::Not(program[ip+1], program[ip+2]),
+        15 => Code::Rmem(program[ip+1], program[ip+2]),
+        16 => Code::Wmem(program[ip+1], program[ip+2]),
+        17 => Code::Call(program[ip+1]),
+        18 => Code::Ret,
+        19 => Code::Out(program[ip+1]),
+        20 => Code::In(program[ip+1]),
+        21 => Code::Noop,
+        _ => Code::Unknown,
+    }
+}
+
+/// run the OP code with side effects
+pub fn execute(state: &mut State, meta: &mut Meta) {
+        match state.program[state.ip as usize] {
+            0 => {
+                meta.halt = true;
+            },
+            1 => {
+                if meta.debug {
+                    println!("opcode 1: SET [A] TO B");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                state.register[a] = b;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [A{}] = B{}", a, b);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP A{}]", a);
+                }
+            }
+            2 => {
+                if meta.debug {
+                    println!("opcode 2: PUSH TO STACK FROM [A]");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a: u16 = read_argument(&state);
+                let b: u16 = write_argument(&state);
+
+                state.stack.push(a);
+                state.sp = state.sp + 1;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  <{}> = [A{}]", state.sp, b);
+                    println!("          <{}> = {}", state.sp, a);
+                    println!("          <{}> = {}", state.sp, state.stack[state.sp - 1]);
+                    println!(" [SP IP] <{}>", state.sp);
+                }
+            }
+            3 => {
+                if meta.debug {
+                    println!("opcode 3: POP FROM STACK TO [A]");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                state.sp = state.sp - 1;
+                if let Some(data) = state.stack.pop() {
+                    state.register[a] = data;
+                } else {
+                    // halt
+                }
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [A{}] = <{}>", a, state.sp);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!(" [IP SP A{}] <{}>", a, state.sp);
+                }
+            }
+            4 => {
+                if meta.debug {
+                    println!("opcode 4: IF B EQUALS C SET A TO 1 ELSE A TO 0");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                if b == c {
+                    state.register[a] = 1;
+                } else {
+                    state.register[a] = 0;
+                }
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [A{}] = B{} == C{}", a, b, c);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [{} IP]", a);
+                }
+            }
+            5 => {
+                //3 args, should increment ip by 8
+                if meta.debug {
+                    println!("opcode 5: IF B LARGER THAN C SET A TO 1 ELSE A TO 0");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                if b > c {
+                    state.register[a] = 1;
+                } else {
+                    state.register[a] = 0;
+                }
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [A{}] = B{} > C{}", a, b, c);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!("[{} IP]", a);
+                }
+            }
+            6 => {
+                if meta.debug {
+                    println!("opcode 6: JUMP");
+                    println!(" A: JUMP ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let a = read_argument(&state) as usize;
+
+                state.ip = a * 2;
+
+                if meta.debug {
+                    println!(" RESULT:  [IP] = &{}", a * 2);
+                    println!("          [IP] = &{}", state.ip);
+                    println!("");
+                    println!(" [IP]");
+                }
+            }
+            7 => {
+                if meta.debug {
+                    println!("opcode 7: JUMP IF NONZERO");
+                    println!(" A: CONDITIONAL");
+                }
+                state.ip = state.ip + 2;
+                let a: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" B: JUMP ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let b = read_argument(&state) as usize;
+
+                if a != 0 {
+                    state.ip = b * 2;
+                } else {
+                    state.ip = state.ip + 2;
+                }
+
+                if meta.debug {
+                    println!(" RESULT:  A{} != 0", b * 2);
+                    println!("          [IP] = B{}", b * 2);
+                    println!("          [IP] == {}", state.ip);
+                    println!(" [IP]");
+                }
+            }
+            8 => {
+                if meta.debug {
+                    println!("opcode 8: JUMP IF ZERO");
+                    println!(" A: CONDITIONAL");
+                }
+                state.ip = state.ip + 2;
+                let a: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" B: JUMP ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let b = read_argument(&state) as usize;
+
+                if a == 0 {
+                    state.ip = b * 2;
+                } else {
+                    state.ip = state.ip + 2;
+                }
+
+                if meta.debug {
+                    println!(" RESULT:  A{} == 0", a);
+                    println!("          [IP] = B{}", b * 2);
+                    println!("          [IP] == {}", state.ip);
+                    println!(" [IP]");
+                }
+            }
+            9 => {
+                if meta.debug {
+                    println!("opcode 9: ADD SET [A] RESULT B + C");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                state.register[a] = (b + c) % 32768;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  B{} + C{} = {}", b, c, (b + c) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            10 => {
+                if meta.debug {
+                    println!("opcode 10: MUTIPLY SET [A] RESULT B * C");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b = read_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c = read_argument(&state) as usize;
+
+                state.register[a] = ((b * c) % 32768) as u16;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  B{} * C{} = {}", b, c, (b * c) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            11 => {
+                if meta.debug {
+                    println!("opcode 11: MODULO SET [A] RESULT B % C");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                state.register[a] = (b % c) % 32768;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  {} % {} = {}", b, c, (b % c) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            12 => {
+                if meta.debug {
+                    println!("opcode 12: AND SET [A] RESULT B & C");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                state.register[a] = (b & c) % 32768;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  {} & {} = {}", b, c, (b & c) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            13 => {
+                if meta.debug {
+                    println!("opcode 13: OR SET [A] RESULT B | C");
+                    println!(" A: REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                if meta.debug {
+                    println!(" C: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let c: u16 = read_argument(&state);
+
+                state.register[a] = (b | c) % 32768;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  {} | {} = {}", b, c, (b | c) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            14 => {
+                if meta.debug {
+                    println!("opcode 14: NOT SET [A] RESULT !B");
+                    println!(" A: REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                state.register[a] = (!b) % 32768;
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  !{} = {}", b, (!b) % 32768);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!("");
+                    println!(" [IP {}]", a);
+                }
+            }
+            15 => {
+                if meta.debug {
+                    println!("opcode 15: RMEM READ TO [A] FROM &B");
+                    println!(" A: REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                if meta.debug {
+                    println!(" B: ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let mut b = read_argument(&state) as usize;
+
+                b = b * 2;
+
+                if meta.debug {
+                    println!(" &B: MEMORY AT B");
+                }
+                let c = read_x(&state, b);
+
+                state.register[a] = c;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [A{}] = &{}", a, b);
+                    println!("          [A{}] = {}", a, c);
+                    println!("          [A{}] = {}", a, state.register[a]);
+                    println!(" [IP {}]", a);
+                }
+            }
+            16 => {
+                if meta.debug {
+                    println!("opcode 16: WMEM WRITE B TO &A");
+                    println!(" A: ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let mut a = read_argument(&state) as usize;
+                a = a * 2;
+
+                if meta.debug {
+                    println!(" B: INTEGER");
+                }
+                state.ip = state.ip + 2;
+                let b: u16 = read_argument(&state);
+
+                let higher = (b >> 8) as u8;
+                let lower = b as u8;
+
+                state.program[a + 1] = higher;
+                state.program[a] = lower;
+
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    println!(" RESULT:  [PROGRAM{}] = B{}", a, b);
+                    println!("          b{:b} b{:b}", higher, lower);
+                    println!(
+                        "          b{:b} b{:b} = b{:b}",
+                        state.program[a + 1],
+                        state.program[a],
+                        b
+                    );
+                    println!(" [IP PROGRAM]");
+                }
+            }
+            17 => {
+                if meta.debug {
+                    println!("opcode 17: CALL &A");
+                    println!(" A: ADDRESS");
+                }
+                state.ip = state.ip + 2;
+                let a = read_argument(&state) as usize;
+
+                state.ip = state.ip + 2;
+                state.stack.push(state.ip as u16 / 2);
+                state.sp = state.sp + 1;
+
+                state.ip = a * 2;
+                if meta.debug {
+                    println!(" RESULT:  [IP{}] = A{}", state.ip, a * 2);
+                    println!("          <{}> = IP{}", state.sp - 1, state.stack[state.sp - 1]);
+                    println!("");
+                    println!(" [IP SP]");
+                }
+            }
+            18 => {
+                if state.sp == 0 {
+                    if meta.debug {
+                        println!("opcode 18: return: {}", state.stack[state.sp]);
+                    }
+                    println!("instructions completed {}", meta.op_count);
+                    println!("IP at {}", state.ip);
+                    meta.halt = true;
+                }
+
+                state.sp = state.sp - 1;
+
+                if meta.debug {
+                    println!("opcode 18: RETURN: {}", state.stack[state.sp] * 2);
+                }
+                state.ip = state.stack[state.sp] as usize * 2;
+                state.stack[state.sp] = 0;
+            }
+            19 => {
+                state.ip = state.ip + 2;
+                if meta.debug {
+                    let a = read_argument(&state);
+                    println!("opcode 19: PRINT: {}", state.program[state.ip]);
+                    println!("{}", a as u8 as char);
+                } else {
+                    let a = read_argument(&state);
+                    // eprintln!("opcode 19: PRINT: {} {}", a as u8 as char, a);
+                    print!("{}", a as u8 as char);
+                    // eprint!("{}", program[ip] as char);
+                }
+                state.ip = state.ip + 2;
+            }
+            20 => {
+                if meta.debug {
+                    println!("opcode 20: READ TO [A]");
+                    println!(" A: STATE.REGISTER");
+                }
+                state.ip = state.ip + 2;
+                let a = write_argument(&state) as usize;
+
+                let res = read();
+                if res as char == '~' {
+                    meta.debug = true;
+                    state.ip = state.ip - 2;
+                } else {
+                    state.register[a] = res as u16;
+                    state.ip = state.ip + 2;
+                }
+            }
+            21 => {
+                if meta.debug {
+                    println!("opcode 21: NOOP");
+                }
+                state.ip = state.ip + 2;
+            }
+            22 => {
+                if state.ip > 0 && meta.op_count > 1 {
+                    panic!("opcode 22 encountered outside of load state")
+                }
+                if meta.debug {
+                    println!("opcode 22: LOAD");
+                }
+                println!("opcode 22: LOAD");
+                state.ip = state.ip + 1;
+                for i in 0..7 {
+                    // load the state.registers
+                    let n = i * 2;
+                    let higher = state.program[state.ip + n + 1] as u16;
+                    let lower = state.program[state.ip + n] as u16;
+                    let value: u16 = higher << 8 | lower;
+                    state.register[i] = value;
+                }
+                state.ip = state.ip + 16;
+                for i in 0..99 {
+                    // load the state.registers
+                    let n = i * 2;
+                    let higher = state.program[state.ip + n + 1] as u16;
+                    let lower = state.program[state.ip + n] as u16;
+                    let value: u16 = higher << 8 | lower;
+                    state.stack[i] = value;
+                }
+                state.ip = state.ip + 100;
+                let higher = state.program[state.ip] as u16;
+                let lower = state.program[state.ip + 1] as u16;
+                let value: u16 = higher << 8 | lower;
+                state.ip = state.ip + 2;
+                state.sp = value as usize;
+                let higher = state.program[state.ip] as u16;
+                let lower = state.program[state.ip + 1] as u16;
+                let value: u16 = higher << 8 | lower;
+                state.ip = value as usize;
+                if meta.debug {
+                    println!("SP at {} {:x}", state.sp, state.sp);
+                    println!("IP at {} {:x}", state.ip, state.ip);
+                }
+            }
+            c => {
+                println!(
+                    "opcode {}: err unkown opcode at {} follows: {:x} {:x}",
+                    c,
+                    state.ip,
+                    state.program[(state.ip + 1)],
+                    state.program[(state.ip + 2)]
+                );
+                println!("instructions completed {}", meta.op_count);
+                println!("IP at {} {:x}", state.ip, state.ip);
+                let mut i = 0;
+                loop {
+                    println!("state.register {}: {}", i, state.register[i]);
+                    i = i + 1;
+                    if i > 7 {
+                        break;
+                    }
+                }
+                let mut i = 0;
+                loop {
+                    println!("stack {}: {}", i, state.stack[i]);
+                    i = i + 1;
+                    if i > 10 {
+                        break;
+                    }
+                }
+                // println!("dumping program");
+                // if let Ok(_) = fs::write("./out", program) {
+                //     println!("dumped!");
+                // }
+                meta.halt = true;
+            }
+        }
+}
