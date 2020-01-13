@@ -680,7 +680,7 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
             18 => {
                 if state.stack.len() == 0 {
                     if meta.debug {
-                        println!("opcode 18: return: {}", state.stack[state.stack.len()]);
+                        println!("opcode 18: return: {}", state.stack[state.stack.len() - 1]);
                     }
                     println!("instructions completed {}", meta.op_count);
                     println!("IP at {}", state.ip);
@@ -689,7 +689,7 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
 
 
                 if meta.debug {
-                    println!("opcode 18: RETURN: {}", state.stack[state.stack.len()] * 2);
+                    println!("opcode 18: RETURN: {}", state.stack[state.stack.len() - 1] * 2);
                 }
 
                 if let Some(n) = state.stack.pop() {
