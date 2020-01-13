@@ -35,7 +35,6 @@ impl Error for RecoveryError {
 pub struct State {
     pub program: Vec<u8>,
     pub register:[u16;8],
-    pub sp: usize,
     pub ip: usize,
     pub stack: Vec<u16>,
     pub debug: bool,
@@ -46,7 +45,6 @@ impl State {
         return State {
             program,
             register: [0;8],
-            sp: 0,
             ip: 0,
             stack: Vec::new(),
             debug: false,
@@ -68,13 +66,14 @@ impl State {
                 return Err(RecoveryError::new(format!("This does not seem to be a valid file, invalid starting code {}", op)));
             }
         }
+        println!("recovering");
         let mut header: Vec<u8> = save.drain(0..10000).collect();
 
         let mut state = State::new(save);
 
         header.remove(0); // remove 0x17
 
-        state.sp = to_u16(header[0], header[1]) as usize;
+        let sp = to_u16(header[0], header[1]) as usize;
         header.drain(0..2);
         state.ip = to_u16(header[0], header[1]) as usize;
         header.drain(0..2);
@@ -84,7 +83,7 @@ impl State {
             state.register[i] = to_u16(header[n], header[n + 1]);
         }
         header.drain(0..16);
-        for i in 0..1028 { // load the stack
+        for i in 0..sp { // load the stack
             let n = i * 2;
             state.stack.push(to_u16(header[n], header[n + 1]))
         }
@@ -97,8 +96,8 @@ impl State {
         let mut save:Vec<u8> = Vec::new();
 
         save.push(0x17); // if 23 is encountered, we know its a save file, 22 is legacy
-        save.push((state.sp >> 8)  as u8);
-        save.push(state.sp as u8);
+        save.push((state.stack.len() >> 8)  as u8);
+        save.push(state.stack.len() as u8);
         save.push((state.ip >> 8)  as u8);
         save.push(state.ip as u8);
         for i in 0..8 { // save the registers
@@ -108,9 +107,6 @@ impl State {
         for i in 0..state.stack.len() { // save the stack
             save.push((state.stack[i] >> 8) as u8);
             save.push(state.stack[i] as u8);
-        }
-        if save.len() < 10000 { // TODO: use an end symbol instead
-            save.append(&mut Vec::<u8>::with_capacity(10000 - save.len()));
         }
         save.append(&mut state.program.clone());
         return save;
@@ -141,7 +137,10 @@ fn recover_legacy(program: Vec<u8>) -> BoxResult<State> {
     let lower = program[ip + 1] as u16;
     let value: u16 = higher << 8 | lower;
     ip = ip + 2;
-    state.sp = value as usize;
+    let sp = value as usize;
+    for i in sp..99 {
+        state.stack.pop();
+    }
     let higher = program[ip] as u16;
     let lower = program[ip + 1] as u16;
     let value: u16 = higher << 8 | lower;

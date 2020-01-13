@@ -7,6 +7,32 @@ use crate::debug::Meta;
 use crate::vm::State;
 use crate::util::write_argument;
 
+macro_rules! instructions {
+    (enum $enum_name:ident {
+        $(
+            $(#[$doc:meta])*
+            $member_name:ident ( $($vty: ty),* )),*
+    }) => {
+        enum $enum_name {
+            $($doc:meta)*
+            $($member_name ( $($vty),* )),*
+        }
+
+        impl $enum_name {
+            fn len(&self) -> usize {
+                match self {
+                    $($enum_name::$member_name(..) => instructions!(@count ($($vty),*))),*
+                }
+            }
+        }
+    };
+
+    (@count ()) => (0);
+    (@count ($a:ty)) => (1);
+    (@count ($a:ty, $b:ty)) => (2);
+    (@count ($a:ty, $b:ty, $c:ty)) => (3);
+}
+
 #[derive(Debug)]
 pub enum Code {
     /// halt: 0
@@ -78,6 +104,35 @@ pub enum Code {
     Unknown,
 }
 
+impl Code {
+    pub fn len(&self) -> usize {
+        match self {
+            Code::Halt => 0,
+            Code::Set(..) => 2,
+            Code::Push(..) => 1,
+            Code::Pop(..) => 1,
+            Code::Equals(..) => 3,
+            Code::GreaterThan(..) => 3,
+            Code::Jump(..) => 1,
+            Code::JumpIfTrue(..) => 2,
+            Code::JumpIfFalse(..) => 2,
+            Code::Add(..) => 3,
+            Code::Multiply(..) => 3,
+            Code::Modulo(..) => 3,
+            Code::And(..) => 3,
+            Code::Or(..) => 3,
+            Code::Not(..) => 2,
+            Code::ReadMemory(..) => 2,
+            Code::WriteMemory(..) => 2,
+            Code::Call(..) => 1,
+            Code::Return => 0,
+            Code::Out(..) => 1,
+            Code::In(..) => 1,
+            _ => 0,
+        }
+    }
+}
+
 /// get the opcode and arguments
 pub fn parse(program: &Vec<u8>, ip: &usize)  -> Code {
     match program[*ip] {
@@ -146,14 +201,13 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
                 let b: u16 = write_argument(&state);
 
                 state.stack.push(a);
-                state.sp = state.sp + 1;
 
                 state.ip = state.ip + 2;
                 if meta.debug {
-                    println!(" RESULT:  <{}> = [A{}]", state.sp, b);
-                    println!("          <{}> = {}", state.sp, a);
-                    println!("          <{}> = {}", state.sp, state.stack[state.sp - 1]);
-                    println!(" [SP IP] <{}>", state.sp);
+                    println!(" RESULT:  <{}> = [A{}]", state.stack.len(), b);
+                    println!("          <{}> = {}", state.stack.len(), a);
+                    println!("          <{}> = {}", state.stack.len(), state.stack[state.stack.len() - 1]);
+                    println!(" [SP IP] <{}>", state.stack.len());
                 }
             }
             3 => {
@@ -164,7 +218,6 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
                 state.ip = state.ip + 2;
                 let a = write_argument(&state) as usize;
 
-                state.sp = state.sp - 1;
                 if let Some(data) = state.stack.pop() {
                     state.register[a] = data;
                 } else {
@@ -173,9 +226,9 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
 
                 state.ip = state.ip + 2;
                 if meta.debug {
-                    println!(" RESULT:  [A{}] = <{}>", a, state.sp);
+                    println!(" RESULT:  [A{}] = <{}>", a, state.stack.len());
                     println!("          [A{}] = {}", a, state.register[a]);
-                    println!(" [IP SP A{}] <{}>", a, state.sp);
+                    println!(" [IP SP A{}] <{}>", a, state.stack.len());
                 }
             }
             4 => {
@@ -566,33 +619,35 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
 
                 state.ip = state.ip + 2;
                 state.stack.push(state.ip as u16 / 2);
-                state.sp = state.sp + 1;
 
                 state.ip = a * 2;
                 if meta.debug {
                     println!(" RESULT:  [IP{}] = A{}", state.ip, a * 2);
-                    println!("          <{}> = IP{}", state.sp - 1, state.stack[state.sp - 1]);
+                    println!("          <{}> = IP{}", state.stack.len() - 1, state.stack[state.stack.len() - 1]);
                     println!("");
                     println!(" [IP SP]");
                 }
             }
             18 => {
-                if state.sp == 0 {
+                if state.stack.len() == 0 {
                     if meta.debug {
-                        println!("opcode 18: return: {}", state.stack[state.sp]);
+                        println!("opcode 18: return: {}", state.stack[state.stack.len()]);
                     }
                     println!("instructions completed {}", meta.op_count);
                     println!("IP at {}", state.ip);
                     meta.halt = true;
                 }
 
-                state.sp = state.sp - 1;
 
                 if meta.debug {
-                    println!("opcode 18: RETURN: {}", state.stack[state.sp] * 2);
+                    println!("opcode 18: RETURN: {}", state.stack[state.stack.len()] * 2);
                 }
-                state.ip = state.stack[state.sp] as usize * 2;
-                state.stack.pop();
+
+                if let Some(n) = state.stack.pop() {
+                    state.ip = n as usize * 2;
+                } else {
+                    // bad state?
+                }
             }
             19 => {
                 state.ip = state.ip + 2;

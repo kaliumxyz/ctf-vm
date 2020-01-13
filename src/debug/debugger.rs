@@ -1,3 +1,4 @@
+use crate::opcode::parse;
 use crate::vm::State;
 use crate::vm::BoxResult;
 use crate::debug::Meta;
@@ -25,6 +26,7 @@ pub enum Command {
     StackGetN(usize),
     Null,
     Noop,
+    PrintInfo,
     PrintMemory,
     PrintMemoryRange(usize,usize),
     PrintMemoryX(usize),
@@ -61,9 +63,18 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
             }
             Command::Noop => {
             }
+            Command::PrintInfo => {
+                println!("[IP] at {}", state.ip);
+            }
             Command::PrintMemory => {
-                for n in state.program.clone() {
-                    println!("{}", n);
+                let mut i = 0;
+                loop {
+                    if i >= state.program.len() {
+                        break;
+                    }
+                    let code = parse(&state.program, &i);
+                    println!("{}: {} {:?}", i, state.program[i], code);
+                    i = i + code.len() * 2 + 2;
                 }
             }
             Command::PrintMemoryRange(mut n, m) => {
@@ -71,18 +82,20 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
                     if n > m {
                         break;
                     }
-                    println!("{}", state.program[n]);
+                    println!("{}: {}", n, state.program[n]);
                     n = n + 1;
                 }
             }
-            Command::PrintMemoryX(m) => {
-                let mut n = state.ip;
+            Command::PrintMemoryX(mut m) => {
+                let mut i = state.ip;
+                m = m + i;
                 loop {
-                    if n > m {
+                    if i >= m {
                         break;
                     }
-                    println!("{}", state.program[n]);
-                    n = n + 1;
+                    let code = parse(&state.program, &i);
+                    println!("{}: {} {:?}", i, state.program[i], code);
+                    i = i + code.len() * 2 + 2;
                 }
             }
             Command::BreakPointOpSet(op) => {

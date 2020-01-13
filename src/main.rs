@@ -104,23 +104,12 @@ fn run(program: Vec<u8>, config: &Config) -> BoxResult<()> {
         meta.op_count = meta.op_count + 1;
 
         if meta.debug {
-            println!("ip: {}, op count: {}", state.ip, meta.op_count);
+            println!("{}: {:?}", state.ip, opcode::parse(&state.program, &state.ip));
         }
 
-        if meta.debug {
-            println!("{:?}", opcode::parse(&state.program, &state.ip));
-        }
-
-        println!("{}: {:?}", state.ip, opcode::parse(&state.program, &state.ip));
 
         // if we want, run the opcode;
         opcode::execute(&mut state, &mut meta);
-
-        if state.sp == 1027 {
-            println!("DEBUG: ip hit 1027");
-            game_over(&state, &meta);
-            meta.debugging = true;
-        }
 
         if meta.break_op == state.program[state.ip as usize] {
             println!("DEBUG: hit break OP: {}", meta.break_op);
