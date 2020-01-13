@@ -1,4 +1,3 @@
-
 use crate::util::read;
 use crate::util::read_x;
 use crate::util::read_argument;
@@ -6,32 +5,6 @@ use crate::halt;
 use crate::debug::Meta;
 use crate::vm::State;
 use crate::util::write_argument;
-
-macro_rules! instructions {
-    (enum $enum_name:ident {
-        $(
-            $(#[$doc:meta])*
-            $member_name:ident ( $($vty: ty),* )),*
-    }) => {
-        enum $enum_name {
-            $($doc:meta)*
-            $($member_name ( $($vty),* )),*
-        }
-
-        impl $enum_name {
-            fn len(&self) -> usize {
-                match self {
-                    $($enum_name::$member_name(..) => instructions!(@count ($($vty),*))),*
-                }
-            }
-        }
-    };
-
-    (@count ()) => (0);
-    (@count ($a:ty)) => (1);
-    (@count ($a:ty, $b:ty)) => (2);
-    (@count ($a:ty, $b:ty, $c:ty)) => (3);
-}
 
 #[derive(Debug)]
 pub enum Code {
@@ -161,6 +134,82 @@ pub fn parse(program: &Vec<u8>, ip: &usize)  -> Code {
         _ => Code::Unknown,
     }
 }
+
+/// get debug information about op
+pub fn debug_op(state: &mut State, meta: &mut Meta, code: Code) {
+}
+
+// /// print debug information about op
+// pub fn inspect_op(code: Code) {
+//     match code {
+//         Code::Halt => {
+//             println!("opcode 0: Halt");
+//             println!("length: 2");
+//         },
+//         Code::Set(arg0, arg1) => {
+//             println!("opcode 1: SET [A] TO B");
+//             println!("length: 4");
+//             println!(" A: REGISTER");
+//             println!(" B: INTEGER");
+//         }
+//         Code::Unknown => {
+//             println!("opcode unknown");
+//         }
+//     }
+// }
+
+// /// execute the opcode with side effects
+// pub fn execute_op(state: &mut State, meta: &mut Meta, code: Code) {
+//     match code {
+//         Code::Halt => {
+//             meta.halt = true;
+//         },
+//         Code::Set(arg0, arg1) => {
+//             if meta.debug {
+//                 println!("opcode 1: SET [A] TO B");
+//                 println!(" A: STATE.REGISTER");
+//             }
+//             state.ip = state.ip + 2;
+//             let a = write_argument(&state) as usize;
+//             if meta.debug {
+//                 println!(" B: INTEGER");
+//             }
+//             state.ip = state.ip + 2;
+//             let b: u16 = read_argument(&state);
+
+//             state.register[a] = b;
+
+//             state.ip = state.ip + 2;
+//             if meta.debug {
+//                 println!(" RESULT:  [A{}] = B{}", a, b);
+//                 println!("          [A{}] = {}", a, state.register[a]);
+//                 println!("");
+//                 println!(" [IP A{}]", a);
+//             }
+//         }
+//         // Code::Push(program[ip+1]),
+//         // Code::Pop(program[ip+1]),
+//         // Code::Equals(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::GreaterThan(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::Jump(program[ip+1]),
+//         // Code::JumpIfTrue(program[ip+1], program[ip+2]),
+//         // Code::JumpIfFalse(program[ip+1], program[ip+2]),
+//         // Code::Add(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::Multiply(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::Modulo(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::And(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::Or(program[ip+1], program[ip+2], program[ip+3]),
+//         // Code::Not(program[ip+1], program[ip+2]),
+//         // Code::ReadMemory(program[ip+1], program[ip+2]),
+//         // Code::WriteMemory(program[ip+1], program[ip+2]),
+//         // Code::Call(program[ip+1]),
+//         // Code::Return,
+//         // Code::Out(program[ip+1]),
+//         // Code::In(program[ip+1]),
+//         // Code::Noop,
+//         // Code::Unknown,
+//     }
+// }
 
 /// run the OP code with side effects
 pub fn execute(state: &mut State, meta: &mut Meta) {
@@ -686,47 +735,6 @@ pub fn execute(state: &mut State, meta: &mut Meta) {
                 }
                 state.ip = state.ip + 2;
             }
-            // 22 => {
-            //     if state.ip > 0 && meta.op_count > 1 {
-            //         panic!("opcode 22 encountered outside of load state")
-            //     }
-            //     if meta.debug {
-            //         println!("opcode 22: LOAD");
-            //     }
-            //     println!("opcode 22: LOAD");
-            //     state.ip = state.ip + 1;
-            //     for i in 0..7 {
-            //         // load the state.registers
-            //         let n = i * 2;
-            //         let higher = state.program[state.ip + n + 1] as u16;
-            //         let lower = state.program[state.ip + n] as u16;
-            //         let value: u16 = higher << 8 | lower;
-            //         state.register[i] = value;
-            //     }
-            //     state.ip = state.ip + 16;
-            //     for i in 0..99 {
-            //         // load the state.registers
-            //         let n = i * 2;
-            //         let higher = state.program[state.ip + n + 1] as u16;
-            //         let lower = state.program[state.ip + n] as u16;
-            //         let value: u16 = higher << 8 | lower;
-            //         state.stack[i] = value;
-            //     }
-            //     state.ip = state.ip + 100;
-            //     let higher = state.program[state.ip] as u16;
-            //     let lower = state.program[state.ip + 1] as u16;
-            //     let value: u16 = higher << 8 | lower;
-            //     state.ip = state.ip + 2;
-            //     state.sp = value as usize;
-            //     let higher = state.program[state.ip] as u16;
-            //     let lower = state.program[state.ip + 1] as u16;
-            //     let value: u16 = higher << 8 | lower;
-            //     state.ip = value as usize;
-            //     if meta.debug {
-            //         println!("SP at {} {:x}", state.sp, state.sp);
-            //         println!("IP at {} {:x}", state.ip, state.ip);
-            //     }
-            // }
             c => {
                 println!(
                     "opcode {}: err unknown opcode at {} follows: {:x} {:x}",

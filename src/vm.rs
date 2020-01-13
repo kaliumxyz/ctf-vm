@@ -67,14 +67,15 @@ impl State {
             }
         }
         println!("recovering");
-        let mut header: Vec<u8> = save.drain(0..10000).collect();
+        let mut header: Vec<u8> = save.drain(0..21).collect();
 
-        let mut state = State::new(save);
 
         header.remove(0); // remove 0x17
 
         let sp = to_u16(header[0], header[1]) as usize;
         header.drain(0..2);
+        let mut stack: Vec<u8> = save.drain(0..(sp * 2)).collect();
+        let mut state = State::new(save);
         state.ip = to_u16(header[0], header[1]) as usize;
         header.drain(0..2);
 
@@ -82,12 +83,13 @@ impl State {
             let n = i * 2;
             state.register[i] = to_u16(header[n], header[n + 1]);
         }
+
         header.drain(0..16);
+
         for i in 0..sp { // load the stack
             let n = i * 2;
-            state.stack.push(to_u16(header[n], header[n + 1]))
+            state.stack.push(to_u16(stack[n], stack[n + 1]))
         }
-        header.drain(0..2057);
 
         Ok(state)
     }
@@ -138,7 +140,7 @@ fn recover_legacy(program: Vec<u8>) -> BoxResult<State> {
     let value: u16 = higher << 8 | lower;
     ip = ip + 2;
     let sp = value as usize;
-    for i in sp..99 {
+    for _i in sp..99 {
         state.stack.pop();
     }
     let higher = program[ip] as u16;

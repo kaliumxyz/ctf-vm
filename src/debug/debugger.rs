@@ -51,10 +51,15 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
             }
         };
 
-        if command == Command::Null {
-            command = meta.last.clone();
-        } else {
-            meta.last = command.clone();
+        match command {
+            Command::Null => {
+                command = meta.last.clone();
+            },
+            Command::Save(_) => {
+            },
+            _ => {
+                meta.last = command.clone();
+            }
         }
 
         match command {
