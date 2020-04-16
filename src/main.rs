@@ -1,3 +1,4 @@
+use std::io::Read;
 use crate::debug::debugger::debugger;
 use std::env;
 use std::error::Error;
@@ -93,7 +94,16 @@ fn load(config: &Config) -> BoxResult<Vec<u8>> {
     return Ok(program);
 }
 
+
+// extern fn handle_sigint(s:i32) {
+//     println!("{}", s);
+// }
+
 fn run(program: Vec<u8>, config: &Config) -> BoxResult<()> {
+    // use nix::sys::signal;
+
+    // unsafe { signal::signal(signal::Signal::SIGTSTP, signal::SigHandler::Handler(handle_sigint)) }?;
+
     let mut state = State::recover(program)?;
 
     let mut meta = Meta::new();
@@ -101,6 +111,10 @@ fn run(program: Vec<u8>, config: &Config) -> BoxResult<()> {
     meta.debug = config.debug;
 
     loop {
+        // first check if there is any user input to handle
+        if meta.debug {
+            println!("{}: {:?}", state.ip, opcode::parse(&state.program, &state.ip));
+        }
         meta.op_count = meta.op_count + 1;
 
         if meta.debug {
