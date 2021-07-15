@@ -74,7 +74,9 @@ pub enum Code {
     /// noop: 21
     ///   no operation
     Noop,
-    Unknown,
+    /// unkown: ??
+    ///   no operation, likely data
+    Data,
 }
 
 impl Code {
@@ -128,9 +130,10 @@ impl Code {
             Code::Out(..) => "write the character represented by ascii code <a> to the terminal",
             Code::In(..) => "read a character from the terminal and write its ascii code to <a>; it can be assumed that once input starts, it will continue until a newline is encountered; this means that you can safely read whole lines from the keyboard and trust that they will be fully read",
             Code::Noop => "no operation",
-            _ => "",
+            Code::Data => "Not a known opcode, likely data",
         }
     }
+
     pub fn name(&self) -> &str {
         match self {
             Code::Halt => "Halt",
@@ -155,14 +158,17 @@ impl Code {
             Code::Out(..) => "Out",
             Code::In(..) => "In",
             Code::Noop => "Noop",
-            _ => "",
+            Code::Data => "Data",
         }
     }
 }
 
 impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({}) {}", self.name(), self.description())
+        match self {
+           Code::Data => write!(f, "{:?}", self),
+           _ => write!(f, "{:?}", self),
+        }
     }
 }
 
@@ -191,7 +197,7 @@ pub fn lookup(op: u8)  -> Code {
         19 => Code::Out(0),
         20 => Code::In(0),
         21 => Code::Noop,
-        _ => Code::Unknown,
+        _ => Code::Data,
     }
 }
 
@@ -220,7 +226,7 @@ pub fn parse(program: &Vec<u8>, ip: &usize)  -> Code {
         19 => Code::Out(program[ip+1]),
         20 => Code::In(program[ip+1]),
         21 => Code::Noop,
-        _ => Code::Unknown,
+        _ => Code::Data,
     }
 }
 
@@ -241,7 +247,7 @@ pub fn debug_op(state: &mut State, meta: &mut Meta, code: Code) {
 //             println!(" A: REGISTER");
 //             println!(" B: INTEGER");
 //         }
-//         Code::Unknown => {
+//         Code::Data => {
 //             println!("opcode unknown");
 //         }
 //     }
@@ -296,7 +302,7 @@ pub fn debug_op(state: &mut State, meta: &mut Meta, code: Code) {
 //         // Code::Out(program[ip+1]),
 //         // Code::In(program[ip+1]),
 //         // Code::Noop,
-//         // Code::Unknown,
+//         // Code::Data,
 //     }
 // }
 

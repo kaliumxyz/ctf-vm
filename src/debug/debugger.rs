@@ -1,5 +1,6 @@
 use crate::opcode::parse;
 use crate::opcode::lookup;
+use crate::opcode::Code;
 use crate::vm::State;
 use crate::vm::BoxResult;
 use crate::debug::Meta;
@@ -79,7 +80,16 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
                         break;
                     }
                     let code = parse(&state.program, &i);
-                    println!("{}: {} {:?}", i, state.program[i], code);
+                    let curr = state.program[i];
+                    if code == Code::Data {
+                        if curr == 0x9B  || curr == 0x1B {
+                            println!("{:#06X}: {:#04X} {} _", i, curr, code);
+                        } else {
+                            println!("{:#06X}: {:#04X} {} {}", i, curr, code, curr as u8 as char);
+                        }
+                    } else {
+                        println!("{:#06X}: {:#04X} {}", i, curr, code);
+                    }
                     i = i + code.len() * 2 + 2;
                 }
             }

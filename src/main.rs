@@ -19,6 +19,8 @@ mod error;
  * DOING:
  *     - proper breakpoints for both points in the program, specific operations
  *       and register access.
+ * DONE:
+ *     - add stepping.
  * TODO:
  *     - pausing the VM from anywhere in the code
  *     - seperating the parsing from the execution
@@ -27,7 +29,6 @@ mod error;
  *     - taking snapshots at any state in the code.
  *     - snapshots which don't mutate program memory.
  *     - seperate the debug printing from the operation execution.
- *     - add stepping.
  *     - add GUI or TUI to allow for rendering the stack and registers while
  *       stepping trough the code.
  *
