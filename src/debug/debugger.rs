@@ -9,6 +9,10 @@ use std::fs;
 use std::io;
 use std::io::Write;
 
+// !macro_rules command {
+
+// }
+
 #[derive(PartialEq, Clone)]
 pub enum Command {
     Save(String),
@@ -29,10 +33,34 @@ pub enum Command {
     Null,
     Noop,
     PrintInfo,
+    // PrintMemoryGrid,
+    // PrintMemoryGridRange(usize,usize),
+    // PrintMemoryGridX(usize),
     PrintMemory,
     PrintMemoryRange(usize,usize),
     PrintMemoryX(usize),
     Halt,
+}
+
+pub fn print_memory(state: &mut State, start: usize, limit: usize) {
+    let mut i = start;
+    loop {
+        if i >= limit {
+            break;
+        }
+        let code = parse(&state.program, &i);
+        let curr = state.program[i];
+        if code == Code::Data {
+            if curr == 0x9B  || curr == 0x1B {
+                println!("{:#06X}: {:#04X} {} _", i, curr, code);
+            } else {
+                println!("{:#06X}: {:#04X} {} {}", i, curr, code, curr as u8 as char);
+            }
+        } else {
+            println!("{:#06X}: {:#04X} {}", i, curr, code);
+        }
+        i = i + code.len() * 2 + 2;
+    }
 }
 
 pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
@@ -74,45 +102,50 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
                 println!("[IP] at {}", state.ip);
             }
             Command::PrintMemory => {
-                let mut i = 0;
-                loop {
-                    if i >= state.program.len() {
-                        break;
-                    }
-                    let code = parse(&state.program, &i);
-                    let curr = state.program[i];
-                    if code == Code::Data {
-                        if curr == 0x9B  || curr == 0x1B {
-                            println!("{:#06X}: {:#04X} {} _", i, curr, code);
-                        } else {
-                            println!("{:#06X}: {:#04X} {} {}", i, curr, code, curr as u8 as char);
-                        }
-                    } else {
-                        println!("{:#06X}: {:#04X} {}", i, curr, code);
-                    }
-                    i = i + code.len() * 2 + 2;
-                }
+                print_memory(state, 0, state.program.len());
+                // let mut i = 0;
+                // loop {
+                //     if i >= state.program.len() {
+                //         break;
+                //     }
+                //     let code = parse(&state.program, &i);
+                //     let curr = state.program[i];
+                //     if code == Code::Data {
+                //         if curr == 0x9B  || curr == 0x1B {
+                //             println!("{:#06X}: {:#04X} {} _", i, curr, code);
+                //         } else {
+                //             println!("{:#06X}: {:#04X} {} {}", i, curr, code, curr as u8 as char);
+                //         }
+                //     } else {
+                //         println!("{:#06X}: {:#04X} {}", i, curr, code);
+                //     }
+                //     i = i + code.len() * 2 + 2;
+                // }
             }
             Command::PrintMemoryRange(mut n, m) => {
-                loop {
-                    if n > m {
-                        break;
-                    }
-                    println!("{}: {}", n, state.program[n]);
-                    n = n + 1;
-                }
+                print_memory(state, n, m);
+                // loop {
+                //     if n > m {
+                //         break;
+                //     }
+                //     println!("{}: {}", n, state.program[n]);
+                //     n = n + 1;
+                // }
             }
             Command::PrintMemoryX(mut m) => {
                 let mut i = state.ip;
                 m = m + i;
-                loop {
-                    if i >= m {
-                        break;
-                    }
-                    let code = parse(&state.program, &i);
-                    println!("{}: {} {:?}", i, state.program[i], code);
-                    i = i + code.len() * 2 + 2;
-                }
+                print_memory(state, i, m);
+                // let mut i = state.ip;
+                // m = m + i;
+                // loop {
+                //     if i >= m {
+                //         break;
+                //     }
+                //     let code = parse(&state.program, &i);
+                //     println!("{}: {} {:?}", i, state.program[i], code);
+                //     i = i + code.len() * 2 + 2;
+                // }
             }
             Command::BreakPointOpSet(op) => {
                 meta.break_op = lookup(op);
