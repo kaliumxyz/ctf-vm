@@ -1,4 +1,5 @@
 use crate::opcode::parse;
+use crate::opcode::lookup;
 use crate::vm::State;
 use crate::vm::BoxResult;
 use crate::debug::Meta;
@@ -104,7 +105,7 @@ pub fn debugger(state: &mut State, meta: &mut Meta) -> BoxResult<()>  {
                 }
             }
             Command::BreakPointOpSet(op) => {
-                meta.break_op = op;
+                meta.break_op = lookup(op);
                 println!("DEBUG: {}", meta.break_op);
             }
             Command::BreakPointOpGet => {

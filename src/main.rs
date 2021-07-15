@@ -1,4 +1,4 @@
-use std::io::Read;
+// use std::io::Read;
 use crate::debug::debugger::debugger;
 use std::env;
 use std::error::Error;
@@ -7,7 +7,7 @@ use std::fs;
 use vm::State;
 use debug::Meta;
 
-use crate::util::*;
+// use crate::util::*;
 use crate::error::*;
 mod vm;
 mod opcode;
@@ -16,6 +16,9 @@ mod debug;
 mod error;
 
 /***
+ * DOING:
+ *     - proper breakpoints for both points in the program, specific operations
+ *       and register access.
  * TODO:
  *     - pausing the VM from anywhere in the code
  *     - seperating the parsing from the execution
@@ -23,8 +26,6 @@ mod error;
  *       processes.
  *     - taking snapshots at any state in the code.
  *     - snapshots which don't mutate program memory.
- *     - proper breakpoints for both points in the program, specific operations
- *       and register access.
  *     - seperate the debug printing from the operation execution.
  *     - add stepping.
  *     - add GUI or TUI to allow for rendering the stack and registers while
@@ -112,20 +113,23 @@ fn run(program: Vec<u8>, config: &Config) -> BoxResult<()> {
 
     loop {
         // first check if there is any user input to handle
+        let last = opcode::parse(&state.program, &state.ip);
         if meta.debug {
-            println!("{}: {:?}", state.ip, opcode::parse(&state.program, &state.ip));
+            println!("{}: {:?}", state.ip, last);
         }
         meta.op_count = meta.op_count + 1;
+        let curr = opcode::parse(&state.program, &state.ip);
 
         if meta.debug {
-            println!("{}: {:?}", state.ip, opcode::parse(&state.program, &state.ip));
+            println!("{}: {:?}", state.ip, curr);
         }
+
 
 
         // if we want, run the opcode;
         opcode::execute(&mut state, &mut meta);
 
-        if meta.break_op == state.program[state.ip as usize] {
+        if meta.break_op == curr {
             println!("DEBUG: hit break OP: {}", meta.break_op);
             game_over(&state, &meta);
             meta.debugging = true;
